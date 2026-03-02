@@ -16,6 +16,7 @@ interface UseEventResizeOptions {
   timeAxisWidth: number;
   onEventChange?: (event: CalendarEvent) => void;
   onEventClick?: (event: CalendarEvent) => void;
+  onResizeNavigate?: (daysDelta: number) => void;
 }
 
 interface UseEventResizeReturn {
@@ -32,6 +33,9 @@ const SNAP_MINUTES = 15;
 const MIN_DURATION_MINUTES = 15;
 const AUTO_SCROLL_ZONE_PX = 60;
 const AUTO_SCROLL_MAX_SPEED = 12;
+const EDGE_ZONE_PX = 40;
+const EDGE_NAV_DELAY_MS = 500;
+const EDGE_NAV_REPEAT_MS = 800;
 
 function snapToGrid(minutes: number): number {
   return Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
@@ -71,12 +75,14 @@ export function useEventResize({
   timeAxisWidth,
   onEventChange,
   onEventClick,
+  onResizeNavigate,
 }: UseEventResizeOptions): UseEventResizeReturn {
   const [resizeState, setResizeState] = useState<EventResizeState | null>(null);
 
   const resizeRef = useRef<ResizeInfo | null>(null);
   const onEventChangeRef = useRef(onEventChange);
   const onEventClickRef = useRef(onEventClick);
+  const onResizeNavigateRef = useRef(onResizeNavigate);
   const eventsRef = useRef(events);
   const hourHeightRef = useRef(hourHeight);
   const daysRef = useRef(days);
@@ -89,6 +95,9 @@ export function useEventResize({
   useEffect(() => {
     onEventClickRef.current = onEventClick;
   }, [onEventClick]);
+  useEffect(() => {
+    onResizeNavigateRef.current = onResizeNavigate;
+  }, [onResizeNavigate]);
   useEffect(() => {
     eventsRef.current = events;
   }, [events]);
@@ -107,6 +116,8 @@ export function useEventResize({
 
   const autoScrollRAFRef = useRef<number | null>(null);
   const autoScrollSpeedRef = useRef(0);
+  const edgeNavTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const edgeNavDirectionRef = useRef<number | null>(null);
 
   const handleMouseMoveRef = useRef<((e: MouseEvent) => void) | null>(null);
   const handleMouseUpRef = useRef<(() => void) | null>(null);
@@ -119,6 +130,28 @@ export function useEventResize({
     autoScrollSpeedRef.current = 0;
   }, []);
 
+  const cancelEdgeNav = useCallback(() => {
+    if (edgeNavTimerRef.current !== null) {
+      clearTimeout(edgeNavTimerRef.current);
+      edgeNavTimerRef.current = null;
+    }
+    edgeNavDirectionRef.current = null;
+  }, []);
+
+  const scheduleEdgeNav = useCallback((direction: number) => {
+    if (edgeNavDirectionRef.current === direction) return;
+
+    cancelEdgeNav();
+    edgeNavDirectionRef.current = direction;
+
+    const fireNav = () => {
+      onResizeNavigateRef.current?.(direction);
+      edgeNavTimerRef.current = setTimeout(fireNav, EDGE_NAV_REPEAT_MS);
+    };
+
+    edgeNavTimerRef.current = setTimeout(fireNav, EDGE_NAV_DELAY_MS);
+  }, [cancelEdgeNav]);
+
   const cleanup = useCallback(() => {
     if (handleMouseMoveRef.current) {
       window.removeEventListener("mousemove", handleMouseMoveRef.current);
@@ -127,7 +160,8 @@ export function useEventResize({
       window.removeEventListener("mouseup", handleMouseUpRef.current);
     }
     cancelAutoScroll();
-  }, [cancelAutoScroll]);
+    cancelEdgeNav();
+  }, [cancelAutoScroll, cancelEdgeNav]);
 
   const startAutoScrollLoop = useCallback(() => {
     if (autoScrollRAFRef.current !== null) return;
@@ -183,51 +217,80 @@ export function useEventResize({
       const columnIndex = clamp(Math.floor(cursorInGrid / colWidth), 0, visibleDays.length - 1);
       const targetDay = visibleDays[columnIndex];
 
-      if (resize.edge === "top") {
-        const isCrossDay = targetDay.getTime() < resize.originalEndDate.getTime() &&
-          !isSameDay(targetDay, resize.originalEndDate);
+      // Unified anchor model: anchor is the opposite end of the grabbed edge
+      const anchorDate = resize.edge === "bottom"
+        ? resize.originalStartDate
+        : resize.originalEndDate;
+      const anchorMinutes = resize.edge === "bottom"
+        ? resize.originalStartMinutes
+        : resize.originalEndMinutes;
 
-        if (isCrossDay) {
-          // Cross-day top: start tracks cursor on target day, end stays on original end day
-          // Edge case: cursor at minute 1440 (bottom) of day immediately before end → treat as start-of-end-day
-          const dayBeforeEnd = new Date(resize.originalEndDate);
-          dayBeforeEnd.setDate(dayBeforeEnd.getDate() - 1);
-          dayBeforeEnd.setHours(0, 0, 0, 0);
+      const cursorTimestamp = targetDay.getTime() + snappedMinutes * 60000;
+      const anchorTimestamp = anchorDate.getTime() + anchorMinutes * 60000;
 
-          if (isSameDay(targetDay, dayBeforeEnd) && snappedMinutes >= 1440) {
-            newStartMinutes = 0;
-            startDate = resize.originalEndDate;
-          } else {
-            newStartMinutes = clamp(snappedMinutes, 0, 1440);
-            startDate = targetDay;
+      let effectiveEdge: "top" | "bottom";
+
+      if (cursorTimestamp > anchorTimestamp) {
+        // Cursor is after anchor → effective bottom
+        effectiveEdge = "bottom";
+        startDate = anchorDate;
+        newStartMinutes = anchorMinutes;
+        endDate = targetDay;
+        newEndMinutes = clamp(snappedMinutes, 0, 1440);
+
+        // Cross-day edge case: cursor at minute 0 on day right after anchor → treat as end-of-anchor-day
+        if (!isSameDay(targetDay, anchorDate)) {
+          const dayAfterAnchor = new Date(anchorDate);
+          dayAfterAnchor.setDate(dayAfterAnchor.getDate() + 1);
+          dayAfterAnchor.setHours(0, 0, 0, 0);
+
+          if (isSameDay(targetDay, dayAfterAnchor) && snappedMinutes === 0) {
+            newEndMinutes = 1440;
+            endDate = anchorDate;
           }
-        } else {
-          // Same day: clamp start between 0 and originalEndMinutes - min
-          newStartMinutes = clamp(snappedMinutes, 0, resize.originalEndMinutes - MIN_DURATION_MINUTES);
-          startDate = resize.originalEndDate;
+        }
+
+        // Same-day: enforce min duration
+        if (isSameDay(startDate, endDate)) {
+          newEndMinutes = clamp(newEndMinutes, anchorMinutes + MIN_DURATION_MINUTES, 1440);
+        }
+      } else if (cursorTimestamp < anchorTimestamp) {
+        // Cursor is before anchor → effective top
+        effectiveEdge = "top";
+        endDate = anchorDate;
+        newEndMinutes = anchorMinutes;
+        startDate = targetDay;
+        newStartMinutes = clamp(snappedMinutes, 0, 1440);
+
+        // Cross-day edge case: cursor at minute 1440 on day right before anchor → treat as start-of-anchor-day
+        if (!isSameDay(targetDay, anchorDate)) {
+          const dayBeforeAnchor = new Date(anchorDate);
+          dayBeforeAnchor.setDate(dayBeforeAnchor.getDate() - 1);
+          dayBeforeAnchor.setHours(0, 0, 0, 0);
+
+          if (isSameDay(targetDay, dayBeforeAnchor) && snappedMinutes >= 1440) {
+            newStartMinutes = 0;
+            startDate = anchorDate;
+          }
+        }
+
+        // Same-day: enforce min duration
+        if (isSameDay(startDate, endDate)) {
+          newStartMinutes = clamp(newStartMinutes, 0, anchorMinutes - MIN_DURATION_MINUTES);
         }
       } else {
-        const isCrossDay = targetDay.getTime() > resize.originalStartDate.getTime() &&
-          !isSameDay(targetDay, resize.originalStartDate);
-
-        if (isCrossDay) {
-          // Cross-day bottom: keep start on original day, end tracks cursor on target day
-          // Edge case: cursor at minute 0 of day immediately after start → treat as end-of-start-day
-          const nextDayAfterStart = new Date(resize.originalStartDate);
-          nextDayAfterStart.setDate(nextDayAfterStart.getDate() + 1);
-          nextDayAfterStart.setHours(0, 0, 0, 0);
-
-          if (isSameDay(targetDay, nextDayAfterStart) && snappedMinutes === 0) {
-            newEndMinutes = 1440;
-            endDate = resize.originalStartDate;
-          } else {
-            newEndMinutes = clamp(snappedMinutes, 0, 1440);
-            endDate = targetDay;
-          }
+        // Cursor at anchor → keep minimum duration in original edge direction (no flip)
+        effectiveEdge = resize.edge;
+        if (resize.edge === "bottom") {
+          startDate = anchorDate;
+          newStartMinutes = anchorMinutes;
+          endDate = anchorDate;
+          newEndMinutes = anchorMinutes + MIN_DURATION_MINUTES;
         } else {
-          // Same day: existing same-day clamp logic
-          newEndMinutes = clamp(snappedMinutes, resize.originalStartMinutes + MIN_DURATION_MINUTES, 1440);
-          endDate = resize.originalStartDate;
+          endDate = anchorDate;
+          newEndMinutes = anchorMinutes;
+          startDate = anchorDate;
+          newStartMinutes = anchorMinutes - MIN_DURATION_MINUTES;
         }
       }
 
@@ -242,6 +305,7 @@ export function useEventResize({
         currentStart,
         currentEnd,
         edge: resize.edge,
+        effectiveEdge,
         isResizing: true,
         currentEndDate: endDate,
         currentStartDate: startDate,
@@ -263,6 +327,18 @@ export function useEventResize({
         startAutoScrollLoop();
       } else {
         cancelAutoScroll();
+      }
+
+      // Edge-of-view week navigation
+      const cursorXInGrid = e.clientX - gridLeftEdge;
+      const gridWidth = colWidth * visibleDays.length;
+
+      if (cursorXInGrid < EDGE_ZONE_PX) {
+        scheduleEdgeNav(-7);
+      } else if (cursorXInGrid > gridWidth - EDGE_ZONE_PX) {
+        scheduleEdgeNav(7);
+      } else {
+        cancelEdgeNav();
       }
     };
 
@@ -298,7 +374,7 @@ export function useEventResize({
 
       resizeRef.current = null;
     };
-  }, [scrollContainerRef, cleanup, cancelAutoScroll, startAutoScrollLoop]);
+  }, [scrollContainerRef, cleanup, cancelAutoScroll, startAutoScrollLoop, scheduleEdgeNav, cancelEdgeNav]);
 
   const handleResizeMouseDown = useCallback(
     (e: React.MouseEvent, event: CalendarEvent, edge: "top" | "bottom") => {
@@ -336,6 +412,7 @@ export function useEventResize({
         currentStart: event.start,
         currentEnd: event.end,
         edge,
+        effectiveEdge: edge,
         isResizing: false,
         currentEndDate: originalEndDate,
         currentStartDate: originalStartDate,

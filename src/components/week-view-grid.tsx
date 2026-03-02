@@ -88,6 +88,7 @@ export function WeekViewGrid({
           return (
             <DayEventsColumn
               key={day.date.toISOString()}
+              columnDate={day.date}
               events={positionedEvents}
               hourHeight={hourHeight}
               onEventClick={onEventClick}
@@ -106,8 +107,7 @@ export function WeekViewGrid({
 
       {/* Resize placeholder overlay — rendered at grid level for cross-day support */}
       {resizeState?.isResizing &&
-        ((resizeState.edge === "bottom" && !isSameDay(resizeState.currentEndDate, resizeState.event.start)) ||
-         (resizeState.edge === "top" && !isSameDay(resizeState.currentStartDate, startOfDay(resizeState.event.end)))) && (
+        !isSameDay(resizeState.currentStartDate, resizeState.currentEndDate) && (
         <ResizePlaceholderOverlay
           days={days}
           hourHeight={hourHeight}
@@ -205,7 +205,7 @@ function ResizePlaceholderOverlay({
   hourHeight,
   resizeState,
 }: ResizePlaceholderOverlayProps) {
-  if (resizeState.edge === "bottom") {
+  if (resizeState.effectiveEdge === "bottom") {
     return (
       <BottomEdgeOverlay days={days} hourHeight={hourHeight} resizeState={resizeState} />
     );
@@ -221,10 +221,9 @@ function BottomEdgeOverlay({
   hourHeight,
   resizeState,
 }: ResizePlaceholderOverlayProps) {
-  const eventStartDay = startOfDay(resizeState.event.start);
   const endDay = resizeState.currentEndDate;
 
-  const startColIndex = days.findIndex((d) => isSameDay(d.date, eventStartDay));
+  const startColIndex = days.findIndex((d) => isSameDay(d.date, resizeState.currentStartDate));
   const endColIndex = days.findIndex((d) => isSameDay(d.date, endDay));
 
   if (startColIndex === -1 || endColIndex === -1) return null;
@@ -282,11 +281,10 @@ function TopEdgeOverlay({
   hourHeight,
   resizeState,
 }: ResizePlaceholderOverlayProps) {
-  const eventEndDay = startOfDay(resizeState.event.end);
   const startDay = resizeState.currentStartDate;
 
   const startColIndex = days.findIndex((d) => isSameDay(d.date, startDay));
-  const endColIndex = days.findIndex((d) => isSameDay(d.date, eventEndDay));
+  const endColIndex = days.findIndex((d) => isSameDay(d.date, resizeState.currentEndDate));
 
   if (startColIndex === -1 || endColIndex === -1) return null;
   if (endColIndex <= startColIndex) return null;
@@ -400,6 +398,7 @@ function FloatingDragCopy({
 }
 
 interface DayEventsColumnProps {
+  columnDate: Date;
   events: ReturnType<typeof calculatePositionedEvents>;
   hourHeight: number;
   onEventClick?: (event: CalendarEvent) => void;
@@ -428,6 +427,7 @@ function renderColumnGhost(
 }
 
 function DayEventsColumn({
+  columnDate,
   events,
   hourHeight,
   onEventClick,
@@ -453,41 +453,45 @@ function DayEventsColumn({
         const isBeingResized = resizeState?.isResizing && resizeState.eventId === eventId;
 
         if (isBeingResized) {
-          const isCrossDayBottom = resizeState.edge === "bottom" &&
-            !isSameDay(resizeState.currentEndDate, resizeState.event.start);
-          const isCrossDayTop = resizeState.edge === "top" &&
-            !isSameDay(resizeState.currentStartDate, startOfDay(resizeState.event.end));
-          const isCrossDay = isCrossDayBottom || isCrossDayTop;
+          const { effectiveEdge, currentStartDate, currentEndDate } = resizeState;
+          const isCrossDay = !isSameDay(currentStartDate, currentEndDate);
 
-          const seg = positionedEvent.segmentPosition;
+          // Determine if this column is the anchor column
+          const isAnchorColumn =
+            (effectiveEdge === "bottom" && isSameDay(columnDate, currentStartDate)) ||
+            (effectiveEdge === "top" && isSameDay(columnDate, currentEndDate));
 
-          // Non-anchor columns: just render ghost, overlay handles the rest
-          // Bottom resize anchor is the start column; top resize anchor is the end column
-          if (resizeState.edge === "bottom" && seg !== "start" && seg !== "full") {
+          // Check if this column is within the new range at all
+          const colTime = columnDate.getTime();
+          const inRange = colTime >= currentStartDate.getTime() && colTime <= currentEndDate.getTime();
+
+          // Non-anchor columns with original segments: render as ghost
+          // Columns outside new range with original segments: render as ghost
+          if (!isAnchorColumn || !inRange) {
             return renderColumnGhost(positionedEvent, hourHeight);
           }
-          if (resizeState.edge === "top" && seg !== "end" && seg !== "full") {
-            return renderColumnGhost(positionedEvent, hourHeight);
+
+          // Anchor column rendering
+          let displayStart: Date;
+          let displayEnd: Date;
+          let segmentPosition: "start" | "middle" | "end" | "full";
+
+          if (!isCrossDay) {
+            // Same day: show currentStart to currentEnd
+            displayStart = resizeState.currentStart;
+            displayEnd = resizeState.currentEnd;
+            segmentPosition = "full";
+          } else if (effectiveEdge === "bottom") {
+            // Anchor is start column: show currentStart to end-of-day
+            displayStart = resizeState.currentStart;
+            displayEnd = addDays(startOfDay(columnDate), 1);
+            segmentPosition = "start";
+          } else {
+            // Anchor is end column: show start-of-day to currentEnd
+            displayStart = startOfDay(columnDate);
+            displayEnd = resizeState.currentEnd;
+            segmentPosition = "end";
           }
-
-          let displayStart = resizeState.currentStart;
-          let displayEnd = resizeState.currentEnd;
-
-          if (isCrossDayBottom) {
-            // Bottom cross-day: this column shows start segment, clamp end to midnight
-            displayEnd = addDays(startOfDay(resizeState.event.start), 1);
-          }
-
-          if (isCrossDayTop) {
-            // Top cross-day: this column shows end segment, clamp start to midnight
-            displayStart = startOfDay(resizeState.event.end);
-          }
-
-          const segmentPosition = isCrossDayBottom
-            ? "start" as const
-            : isCrossDayTop
-              ? "end" as const
-              : "full" as const;
 
           const resizePositioned = { ...positionedEvent, segmentPosition };
 

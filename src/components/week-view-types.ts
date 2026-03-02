@@ -289,8 +289,10 @@ export interface EventResizeState {
   currentStart: Date;
   /** Current snapped end time during resize */
   currentEnd: Date;
-  /** Which edge is being dragged */
+  /** Which edge was originally grabbed */
   edge: "top" | "bottom";
+  /** Which edge the cursor is effectively on (flips when crossing anchor) */
+  effectiveEdge: "top" | "bottom";
   /** Whether the drag threshold has been met */
   isResizing: boolean;
   /** Target day column for the end during cross-day bottom resize */

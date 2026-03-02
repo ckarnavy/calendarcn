@@ -210,6 +210,7 @@ export function WeekView({
     timeAxisWidth: TIME_AXIS_WIDTH,
     onEventChange,
     onEventClick,
+    onResizeNavigate: handleDragNavigate,
   });
 
   const { dragState, handleEventMouseDown } = useEventDrag({
