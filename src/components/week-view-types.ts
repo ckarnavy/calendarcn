@@ -96,6 +96,10 @@ export interface WeekViewGridProps {
   dragState?: EventDragState;
   /** Mousedown handler to initiate event drag */
   onEventDragMouseDown?: (e: React.MouseEvent, event: CalendarEvent) => void;
+  /** Current resize state if an event is being resized */
+  resizeState?: EventResizeState;
+  /** Mousedown handler to initiate event resize */
+  onEventResizeMouseDown?: (e: React.MouseEvent, event: CalendarEvent, edge: "top" | "bottom") => void;
   /** Callback when an event is changed (e.g. color change from context menu) */
   onEventChange?: (event: CalendarEvent) => void;
   /** Set of event IDs with unsaved changes */
@@ -138,6 +142,20 @@ export interface WeekViewAllDayRowProps {
   selectedEventId?: string;
   /** Optional scroll transform style for horizontal scroll sync */
   scrollStyle?: React.CSSProperties;
+  /** Current all-day resize state */
+  allDayResizeState?: AllDayResizeState;
+  /** Mousedown handler to initiate all-day event resize */
+  onAllDayResizeMouseDown?: (
+    e: React.MouseEvent,
+    event: CalendarEvent,
+    edge: "left" | "right",
+    startColumn: number,
+    endColumn: number,
+  ) => void;
+  /** Callback when an event is changed */
+  onEventChange?: (event: CalendarEvent) => void;
+  /** Ref to attach to the scroll content div for column measurements */
+  allDayScrollContentRef?: React.RefObject<HTMLDivElement | null>;
   /** Optional className */
   className?: string;
 }
@@ -216,6 +234,8 @@ export interface PositionedEvent {
   column: number;
   /** Total columns when events overlap */
   totalColumns: number;
+  /** Segment position for multi-day timed events (controls corner rounding) */
+  segmentPosition?: "start" | "middle" | "end" | "full";
 }
 
 /**
@@ -254,6 +274,54 @@ export interface EventDragState {
 }
 
 /**
+ * State of an in-progress event resize operation
+ */
+export interface EventResizeState {
+  /** ID of the event being resized */
+  eventId: string;
+  /** The original event being resized */
+  event: CalendarEvent;
+  /** Original start time before resize */
+  originalStart: Date;
+  /** Original end time before resize */
+  originalEnd: Date;
+  /** Current snapped start time during resize */
+  currentStart: Date;
+  /** Current snapped end time during resize */
+  currentEnd: Date;
+  /** Which edge is being dragged */
+  edge: "top" | "bottom";
+  /** Whether the drag threshold has been met */
+  isResizing: boolean;
+  /** Target day column for the end during cross-day bottom resize */
+  currentEndDate: Date;
+  /** Target day column for the start during cross-day top resize */
+  currentStartDate: Date;
+}
+
+/**
+ * State of an in-progress all-day event resize operation
+ */
+export interface AllDayResizeState {
+  /** ID of the event being resized */
+  eventId: string;
+  /** The original event being resized */
+  event: CalendarEvent;
+  /** Original start column index in the buffered days array */
+  originalStartColumn: number;
+  /** Original end column index in the buffered days array */
+  originalEndColumn: number;
+  /** Current start column index during resize */
+  currentStartColumn: number;
+  /** Current end column index during resize */
+  currentEndColumn: number;
+  /** Which edge is being dragged */
+  edge: "left" | "right";
+  /** Whether the drag threshold has been met */
+  isResizing: boolean;
+}
+
+/**
  * Props for the CalendarEventItem component
  */
 export interface CalendarEventItemProps {
@@ -277,6 +345,8 @@ export interface CalendarEventItemProps {
   overrideEnd?: Date;
   /** Mousedown handler to initiate drag */
   onDragMouseDown?: (e: React.MouseEvent, event: CalendarEvent) => void;
+  /** Mousedown handler to initiate resize */
+  onResizeMouseDown?: (e: React.MouseEvent, event: CalendarEvent, edge: "top" | "bottom") => void;
   /** Callback when an event is changed (e.g. color change from context menu) */
   onEventChange?: (event: CalendarEvent) => void;
   /** Raw cursor Y position for smooth dragging copy */

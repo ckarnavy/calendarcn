@@ -2,7 +2,7 @@
 
 import React from "react";
 import { createPortal } from "react-dom";
-import { isSameDay } from "date-fns";
+import { isSameDay, startOfDay, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { isPast } from "date-fns";
 import { calculatePositionedEvents } from "@/lib/event-utils";
@@ -10,6 +10,7 @@ import { CalendarEventItem } from "./calendar-event-item";
 import type {
   CalendarEvent,
   EventDragState,
+  EventResizeState,
   PositionedEvent,
   WeekViewGridProps,
 } from "./week-view-types";
@@ -27,6 +28,8 @@ export function WeekViewGrid({
   selectedEventId,
   dragState,
   onEventDragMouseDown,
+  resizeState,
+  onEventResizeMouseDown,
   onEventChange,
   dirtyEventIds,
   onContextMenuOpenChange,
@@ -91,6 +94,8 @@ export function WeekViewGrid({
               selectedEventId={selectedEventId}
               dragState={dragState}
               onEventDragMouseDown={onEventDragMouseDown}
+              resizeState={resizeState}
+              onEventResizeMouseDown={onEventResizeMouseDown}
               onEventChange={onEventChange}
               dirtyEventIds={dirtyEventIds}
               onContextMenuOpenChange={onContextMenuOpenChange}
@@ -98,6 +103,17 @@ export function WeekViewGrid({
           );
         })}
       </div>
+
+      {/* Resize placeholder overlay — rendered at grid level for cross-day support */}
+      {resizeState?.isResizing &&
+        ((resizeState.edge === "bottom" && !isSameDay(resizeState.currentEndDate, resizeState.event.start)) ||
+         (resizeState.edge === "top" && !isSameDay(resizeState.currentStartDate, startOfDay(resizeState.event.end)))) && (
+        <ResizePlaceholderOverlay
+          days={days}
+          hourHeight={hourHeight}
+          resizeState={resizeState}
+        />
+      )}
 
       {/* Drag placeholder overlay — rendered at grid level for cross-column support */}
       {dragState?.isDragging && (
@@ -178,6 +194,150 @@ function DragPlaceholderOverlay({
   );
 }
 
+interface ResizePlaceholderOverlayProps {
+  days: WeekViewGridProps["days"];
+  hourHeight: number;
+  resizeState: EventResizeState;
+}
+
+function ResizePlaceholderOverlay({
+  days,
+  hourHeight,
+  resizeState,
+}: ResizePlaceholderOverlayProps) {
+  if (resizeState.edge === "bottom") {
+    return (
+      <BottomEdgeOverlay days={days} hourHeight={hourHeight} resizeState={resizeState} />
+    );
+  }
+
+  return (
+    <TopEdgeOverlay days={days} hourHeight={hourHeight} resizeState={resizeState} />
+  );
+}
+
+function BottomEdgeOverlay({
+  days,
+  hourHeight,
+  resizeState,
+}: ResizePlaceholderOverlayProps) {
+  const eventStartDay = startOfDay(resizeState.event.start);
+  const endDay = resizeState.currentEndDate;
+
+  const startColIndex = days.findIndex((d) => isSameDay(d.date, eventStartDay));
+  const endColIndex = days.findIndex((d) => isSameDay(d.date, endDay));
+
+  if (startColIndex === -1 || endColIndex === -1) return null;
+  if (endColIndex <= startColIndex) return null;
+
+  return (
+    <div
+      className="absolute inset-0 grid pointer-events-none"
+      style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}
+    >
+      {days.map((day, i) => {
+        // Skip start column (handled by DayEventsColumn) and columns outside range
+        if (i <= startColIndex || i > endColIndex) {
+          return <div key={day.date.toISOString()} />;
+        }
+
+        const isEndColumn = i === endColIndex;
+        const segmentPosition = isEndColumn ? "end" as const : "middle" as const;
+
+        const midnight = startOfDay(day.date);
+        const overrideStart = midnight;
+        const overrideEnd = isEndColumn
+          ? resizeState.currentEnd
+          : addDays(midnight, 1);
+
+        const positioned: PositionedEvent = {
+          event: resizeState.event,
+          top: 0,
+          height: 0,
+          left: 0,
+          width: 92,
+          column: 0,
+          totalColumns: 1,
+          segmentPosition,
+        };
+
+        return (
+          <div key={day.date.toISOString()} className="relative">
+            <CalendarEventItem
+              positionedEvent={positioned}
+              hourHeight={hourHeight}
+              isSelected
+              overrideStart={overrideStart}
+              overrideEnd={overrideEnd}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TopEdgeOverlay({
+  days,
+  hourHeight,
+  resizeState,
+}: ResizePlaceholderOverlayProps) {
+  const eventEndDay = startOfDay(resizeState.event.end);
+  const startDay = resizeState.currentStartDate;
+
+  const startColIndex = days.findIndex((d) => isSameDay(d.date, startDay));
+  const endColIndex = days.findIndex((d) => isSameDay(d.date, eventEndDay));
+
+  if (startColIndex === -1 || endColIndex === -1) return null;
+  if (endColIndex <= startColIndex) return null;
+
+  return (
+    <div
+      className="absolute inset-0 grid pointer-events-none"
+      style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}
+    >
+      {days.map((day, i) => {
+        // Skip end column (handled by DayEventsColumn) and columns outside range
+        if (i < startColIndex || i >= endColIndex) {
+          return <div key={day.date.toISOString()} />;
+        }
+
+        const isStartColumn = i === startColIndex;
+        const segmentPosition = isStartColumn ? "start" as const : "middle" as const;
+
+        const midnight = startOfDay(day.date);
+        const overrideStart = isStartColumn
+          ? resizeState.currentStart
+          : midnight;
+        const overrideEnd = addDays(midnight, 1);
+
+        const positioned: PositionedEvent = {
+          event: resizeState.event,
+          top: 0,
+          height: 0,
+          left: 0,
+          width: 92,
+          column: 0,
+          totalColumns: 1,
+          segmentPosition,
+        };
+
+        return (
+          <div key={day.date.toISOString()} className="relative">
+            <CalendarEventItem
+              positionedEvent={positioned}
+              hourHeight={hourHeight}
+              isSelected
+              overrideStart={overrideStart}
+              overrideEnd={overrideEnd}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 interface FloatingDragCopyProps {
   days: WeekViewGridProps["days"];
   hourHeight: number;
@@ -246,6 +406,8 @@ interface DayEventsColumnProps {
   selectedEventId?: string;
   dragState?: EventDragState;
   onEventDragMouseDown?: (e: React.MouseEvent, event: CalendarEvent) => void;
+  resizeState?: EventResizeState;
+  onEventResizeMouseDown?: (e: React.MouseEvent, event: CalendarEvent, edge: "top" | "bottom") => void;
   onEventChange?: (event: CalendarEvent) => void;
   dirtyEventIds?: Set<string>;
   onContextMenuOpenChange?: (open: boolean) => void;
@@ -272,6 +434,8 @@ function DayEventsColumn({
   selectedEventId,
   dragState,
   onEventDragMouseDown,
+  resizeState,
+  onEventResizeMouseDown,
   onEventChange,
   dirtyEventIds,
   onContextMenuOpenChange,
@@ -286,6 +450,65 @@ function DayEventsColumn({
           return renderColumnGhost(positionedEvent, hourHeight);
         }
 
+        const isBeingResized = resizeState?.isResizing && resizeState.eventId === eventId;
+
+        if (isBeingResized) {
+          const isCrossDayBottom = resizeState.edge === "bottom" &&
+            !isSameDay(resizeState.currentEndDate, resizeState.event.start);
+          const isCrossDayTop = resizeState.edge === "top" &&
+            !isSameDay(resizeState.currentStartDate, startOfDay(resizeState.event.end));
+          const isCrossDay = isCrossDayBottom || isCrossDayTop;
+
+          const seg = positionedEvent.segmentPosition;
+
+          // Non-anchor columns: just render ghost, overlay handles the rest
+          // Bottom resize anchor is the start column; top resize anchor is the end column
+          if (resizeState.edge === "bottom" && seg !== "start" && seg !== "full") {
+            return renderColumnGhost(positionedEvent, hourHeight);
+          }
+          if (resizeState.edge === "top" && seg !== "end" && seg !== "full") {
+            return renderColumnGhost(positionedEvent, hourHeight);
+          }
+
+          let displayStart = resizeState.currentStart;
+          let displayEnd = resizeState.currentEnd;
+
+          if (isCrossDayBottom) {
+            // Bottom cross-day: this column shows start segment, clamp end to midnight
+            displayEnd = addDays(startOfDay(resizeState.event.start), 1);
+          }
+
+          if (isCrossDayTop) {
+            // Top cross-day: this column shows end segment, clamp start to midnight
+            displayStart = startOfDay(resizeState.event.end);
+          }
+
+          const segmentPosition = isCrossDayBottom
+            ? "start" as const
+            : isCrossDayTop
+              ? "end" as const
+              : "full" as const;
+
+          const resizePositioned = { ...positionedEvent, segmentPosition };
+
+          return (
+            <React.Fragment key={eventId}>
+              {renderColumnGhost(positionedEvent, hourHeight)}
+              <CalendarEventItem
+                key={`${eventId}-resizing`}
+                positionedEvent={resizePositioned}
+                hourHeight={hourHeight}
+                isPast={isPast(positionedEvent.event.end)}
+                isSelected={isCrossDay || eventId === selectedEventId}
+                overrideStart={displayStart}
+                overrideEnd={displayEnd}
+                onEventChange={onEventChange}
+                isDirty={dirtyEventIds?.has(eventId)}
+              />
+            </React.Fragment>
+          );
+        }
+
         return (
           <CalendarEventItem
             key={eventId}
@@ -295,6 +518,7 @@ function DayEventsColumn({
             isSelected={eventId === selectedEventId}
             onClick={onEventClick}
             onDragMouseDown={onEventDragMouseDown}
+            onResizeMouseDown={onEventResizeMouseDown}
             onEventChange={onEventChange}
             isDirty={dirtyEventIds?.has(eventId)}
             onContextMenuOpenChange={onContextMenuOpenChange}

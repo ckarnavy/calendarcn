@@ -13,6 +13,8 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { useHorizontalScroll } from "@/hooks/use-horizontal-scroll";
 import { useEventDrag } from "@/hooks/use-event-drag";
+import { useEventResize } from "@/hooks/use-event-resize";
+import { useAllDayResize } from "@/hooks/use-all-day-resize";
 import type { HourSlot, WeekDay, WeekViewProps } from "./week-view-types";
 import { WeekViewAllDayRow } from "./week-view-all-day-row";
 import { WeekViewDayColumns } from "./week-view-day-columns";
@@ -126,6 +128,7 @@ export function WeekView({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const dayColumnsScrollRef = React.useRef<HTMLDivElement>(null);
   const allDayScrollRef = React.useRef<HTMLDivElement>(null);
+  const allDayScrollContentRef = React.useRef<HTMLDivElement>(null);
 
   // Visible days (7 days starting from currentDate)
   const baseDays = React.useMemo(
@@ -154,6 +157,7 @@ export function WeekView({
   const [dayColumnWidth, setDayColumnWidth] = React.useState(0);
   const [hourHeight, setHourHeight] = React.useState(MIN_HOUR_HEIGHT);
   const [contextMenuOpen, setContextMenuOpen] = React.useState(false);
+  const [isAllDayResizing, setIsAllDayResizing] = React.useState(false);
 
   React.useEffect(() => {
     const updateDimensions = () => {
@@ -197,6 +201,17 @@ export function WeekView({
     [days],
   );
 
+  const { resizeState, handleResizeMouseDown } = useEventResize({
+    hourHeight,
+    scrollContainerRef,
+    events: timedEvents,
+    days: visibleDayDates,
+    dayColumnWidth,
+    timeAxisWidth: TIME_AXIS_WIDTH,
+    onEventChange,
+    onEventClick,
+  });
+
   const { dragState, handleEventMouseDown } = useEventDrag({
     hourHeight,
     scrollContainerRef,
@@ -214,7 +229,7 @@ export function WeekView({
       containerRef: scrollContainerRef,
       dayColumnWidth,
       onNavigate: handleNavigate,
-      disabled: dragState?.isDragging || contextMenuOpen,
+      disabled: dragState?.isDragging || resizeState?.isResizing || isAllDayResizing || contextMenuOpen,
     });
 
   // Compute how many days the scroll has shifted from center
@@ -246,6 +261,24 @@ export function WeekView({
     ...day,
     isToday: isToday(day.date),
   }));
+
+  const bufferedDayDates = React.useMemo(
+    () => bufferedBaseDays.map((d) => d.date),
+    [bufferedBaseDays],
+  );
+
+  const { allDayResizeState, handleAllDayResizeMouseDown } = useAllDayResize({
+    days: bufferedDayDates,
+    dayColumnWidth,
+    allDayContainerRef: allDayScrollContentRef,
+    events: allDayEvents,
+    onEventChange,
+    onEventClick,
+  });
+
+  React.useEffect(() => {
+    setIsAllDayResizing(allDayResizeState?.isResizing ?? false);
+  }, [allDayResizeState?.isResizing]);
 
   // Trigger slide animation when currentDate changes externally (not from scroll)
   React.useEffect(() => {
@@ -298,6 +331,10 @@ export function WeekView({
             onEventClick={onEventClick}
             selectedEventId={selectedEventId}
             scrollStyle={scrollStyle}
+            allDayResizeState={allDayResizeState ?? undefined}
+            onAllDayResizeMouseDown={handleAllDayResizeMouseDown}
+            onEventChange={onEventChange}
+            allDayScrollContentRef={allDayScrollContentRef}
           />
         </div>
       </div>
@@ -323,6 +360,8 @@ export function WeekView({
                 selectedEventId={selectedEventId}
                 dragState={dragState ?? undefined}
                 onEventDragMouseDown={handleEventMouseDown}
+                resizeState={resizeState ?? undefined}
+                onEventResizeMouseDown={handleResizeMouseDown}
                 onEventChange={onEventChange}
                 dirtyEventIds={dirtyEventIds}
                 onContextMenuOpenChange={setContextMenuOpen}

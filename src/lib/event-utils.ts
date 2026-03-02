@@ -1,6 +1,7 @@
 import {
   isSameDay,
   startOfDay,
+  addDays,
   differenceInMinutes,
   isWithinInterval,
   areIntervalsOverlapping,
@@ -18,11 +19,15 @@ export function getEventsForDay(
   events: CalendarEvent[],
   day: WeekDay
 ): CalendarEvent[] {
+  const dayStart = startOfDay(day.date);
+  const dayEnd = addDays(dayStart, 1);
+
   return events.filter((event) => {
     if (event.isAllDay) {
       return false;
     }
-    return isSameDay(event.start, day.date);
+    // Event spans this day if it starts before day end AND ends after day start
+    return event.start < dayEnd && event.end > dayStart;
   });
 }
 
@@ -180,19 +185,37 @@ export function calculatePositionedEvents(
   const columnAssignments = assignColumns(dayEvents);
   const dayStart = startOfDay(day.date);
 
+  const nextDayMidnight = addDays(dayStart, 1);
+
   return dayEvents.map((event) => {
     const assignment = columnAssignments.get(event.id) ?? {
       column: 0,
       totalColumns: 1,
     };
 
+    // Compute effective start/end clamped to this day's boundaries
+    const effectiveStart = event.start > dayStart ? event.start : dayStart;
+    const effectiveEnd = event.end < nextDayMidnight ? event.end : nextDayMidnight;
+
     // Calculate top position (percentage from day start)
-    const minutesFromDayStart = differenceInMinutes(event.start, dayStart);
+    const minutesFromDayStart = differenceInMinutes(effectiveStart, dayStart);
     const top = (minutesFromDayStart / (24 * 60)) * 100;
 
     // Calculate height (percentage of the day)
-    const durationMinutes = differenceInMinutes(event.end, event.start);
+    const durationMinutes = differenceInMinutes(effectiveEnd, effectiveStart);
     const height = (durationMinutes / (24 * 60)) * 100;
+
+    // Determine segment position for multi-day events
+    const startsOnDay = isSameDay(event.start, dayStart);
+    const endsOnDay = event.end <= nextDayMidnight;
+    let segmentPosition: "start" | "middle" | "end" | "full" = "full";
+    if (startsOnDay && !endsOnDay) {
+      segmentPosition = "start";
+    } else if (!startsOnDay && endsOnDay) {
+      segmentPosition = "end";
+    } else if (!startsOnDay && !endsOnDay) {
+      segmentPosition = "middle";
+    }
 
     // Calculate left and width based on column assignment
     // Events cascade with overlap - leftmost event has no gap, rightmost has gap
@@ -232,6 +255,7 @@ export function calculatePositionedEvents(
       width,
       column: assignment.column,
       totalColumns: assignment.totalColumns,
+      segmentPosition,
     };
   });
 }

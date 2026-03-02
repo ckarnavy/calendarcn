@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { differenceInMinutes, format } from "date-fns";
+import { differenceInMinutes, format, isSameDay } from "date-fns";
 import {
   Bell,
   Check,
@@ -271,7 +271,7 @@ export function EventDetailPanel({ event, onPrevWeek, onNextWeek }: EventDetailP
       <div className="border-border border-t" />
 
       {/* Time */}
-      {!event.isAllDay && (
+      {(event.start.getHours() !== 0 || event.start.getMinutes() !== 0 || event.end.getHours() !== 0 || event.end.getMinutes() !== 0) && (
         <div className="flex items-center gap-3 px-4">
           <Clock className="size-4 shrink-0 text-[#C7C5C1] dark:text-[#595959]" />
           <div className="flex items-center gap-2 text-xs">
@@ -285,7 +285,9 @@ export function EventDetailPanel({ event, onPrevWeek, onNextWeek }: EventDetailP
 
       {/* Date — indented to align with time text */}
       <div className="text-foreground pl-11 text-xs">
-        {format(event.start, "EEE MMM d")}
+        {isSameDay(event.start, event.end)
+          ? format(event.start, "EEE MMM d")
+          : `${format(event.start, "EEE MMM d")} → ${format(event.end, "EEE MMM d")}`}
       </div>
 
       {event.recurrence ? (

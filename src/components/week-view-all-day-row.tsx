@@ -1,7 +1,9 @@
 "use client";
 
+import type React from "react";
 import { cn } from "@/lib/utils";
 import { isPast, isSameDay } from "date-fns";
+import { useCallback } from "react";
 import { calculateAllDayEventRows } from "@/lib/event-utils";
 import { AllDayEventItem } from "./calendar-event-item";
 import type { CalendarEvent, WeekViewAllDayRowProps } from "./week-view-types";
@@ -19,6 +21,9 @@ export function WeekViewAllDayRow({
   onEventClick,
   selectedEventId,
   scrollStyle,
+  allDayResizeState,
+  onAllDayResizeMouseDown,
+  allDayScrollContentRef,
   className,
 }: WeekViewAllDayRowProps) {
   const eventRows = calculateAllDayEventRows(allDayEvents, days);
@@ -36,7 +41,7 @@ export function WeekViewAllDayRow({
 
       {/* Day columns for all-day events - wrapped for scroll sync */}
       <div className="flex-1 overflow-hidden">
-        <div style={scrollStyle}>
+        <div ref={allDayScrollContentRef} style={scrollStyle}>
           <div className="relative" style={{ minHeight: `${contentHeight}px` }}>
             {/* Background grid */}
             <div
@@ -59,19 +64,35 @@ export function WeekViewAllDayRow({
 
             {/* Events */}
             <div className="relative py-1 px-0.5">
-              {eventRows.map(({ event, startColumn, endColumn, row }) => (
-                <AllDayEventRow
-                  key={event.id}
-                  event={event}
-                  startColumn={startColumn}
-                  endColumn={endColumn}
-                  row={row}
-                  totalColumns={days.length}
-                  days={days}
-                  onEventClick={onEventClick}
-                  isSelected={event.id === selectedEventId}
-                />
-              ))}
+              {eventRows.map(({ event, startColumn, endColumn, row }) => {
+                const isBeingResized =
+                  allDayResizeState?.eventId === event.id &&
+                  allDayResizeState.isResizing;
+                const displayStartColumn = isBeingResized
+                  ? allDayResizeState.currentStartColumn
+                  : startColumn;
+                const displayEndColumn = isBeingResized
+                  ? allDayResizeState.currentEndColumn
+                  : endColumn;
+
+                return (
+                  <AllDayEventRow
+                    key={event.id}
+                    event={event}
+                    startColumn={displayStartColumn}
+                    endColumn={displayEndColumn}
+                    row={row}
+                    totalColumns={days.length}
+                    days={days}
+                    onEventClick={onEventClick}
+                    isSelected={event.id === selectedEventId}
+                    onAllDayResizeMouseDown={onAllDayResizeMouseDown}
+                    originalStartColumn={startColumn}
+                    originalEndColumn={endColumn}
+                    isBeingResized={isBeingResized}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -89,6 +110,10 @@ interface AllDayEventRowProps {
   days: WeekViewAllDayRowProps["days"];
   onEventClick?: (event: CalendarEvent) => void;
   isSelected?: boolean;
+  onAllDayResizeMouseDown?: WeekViewAllDayRowProps["onAllDayResizeMouseDown"];
+  originalStartColumn: number;
+  originalEndColumn: number;
+  isBeingResized?: boolean;
 }
 
 function AllDayEventRow({
@@ -100,6 +125,10 @@ function AllDayEventRow({
   days,
   onEventClick,
   isSelected,
+  onAllDayResizeMouseDown,
+  originalStartColumn,
+  originalEndColumn,
+  isBeingResized,
 }: AllDayEventRowProps) {
   const left = (startColumn / totalColumns) * 100;
   // Subtract ~1.2% for right gap (same 8% gap as regular events, scaled to column width)
@@ -108,8 +137,22 @@ function AllDayEventRow({
   const width = ((endColumn - startColumn + 1) / totalColumns) * 100 - rightGap;
   const top = row * (ALL_DAY_EVENT_HEIGHT + ALL_DAY_ROW_GAP);
 
-  const spanStart = isSameDay(event.start, days[startColumn].date);
-  const spanEnd = isSameDay(event.end, days[endColumn].date);
+  // During resize, both edges are always visible so force rounding on both sides
+  const spanStart = isBeingResized || isSameDay(event.start, days[startColumn].date);
+  const spanEnd = isBeingResized || isSameDay(event.end, days[endColumn].date);
+
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent, ev: CalendarEvent, edge: "left" | "right") => {
+      onAllDayResizeMouseDown?.(
+        e,
+        ev,
+        edge,
+        originalStartColumn,
+        originalEndColumn,
+      );
+    },
+    [onAllDayResizeMouseDown, originalStartColumn, originalEndColumn],
+  );
 
   return (
     <div
@@ -129,6 +172,7 @@ function AllDayEventRow({
         onClick={onEventClick}
         spanStart={spanStart}
         spanEnd={spanEnd}
+        onResizeMouseDown={handleResizeMouseDown}
       />
     </div>
   );

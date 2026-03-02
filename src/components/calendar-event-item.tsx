@@ -102,7 +102,11 @@ function computeOverrideStyle(
   overrideEnd: Date,
 ) {
   const startMinutes = overrideStart.getHours() * 60 + overrideStart.getMinutes();
-  const endMinutes = overrideEnd.getHours() * 60 + overrideEnd.getMinutes();
+  let endMinutes = overrideEnd.getHours() * 60 + overrideEnd.getMinutes();
+  // If end is midnight and on a different day than start, treat as 1440 (end of day)
+  if (endMinutes === 0 && overrideEnd.getDate() !== overrideStart.getDate()) {
+    endMinutes = 1440;
+  }
   const topPx = (startMinutes / 60) * hourHeight;
   const heightPx = ((endMinutes - startMinutes) / 60) * hourHeight;
 
@@ -115,6 +119,8 @@ function computeOverrideStyle(
   };
 }
 
+const RESIZE_HOTZONE_PX = 8;
+
 export function CalendarEventItem({
   positionedEvent,
   hourHeight,
@@ -126,6 +132,7 @@ export function CalendarEventItem({
   overrideStart,
   overrideEnd,
   onDragMouseDown,
+  onResizeMouseDown,
   onEventChange,
   cursorY,
   cursorX,
@@ -134,10 +141,15 @@ export function CalendarEventItem({
   onContextMenuOpenChange,
   className,
 }: CalendarEventItemProps) {
-  const { event } = positionedEvent;
+  const { event, segmentPosition = "full" } = positionedEvent;
   const color = event.color ?? "blue";
   const styles = eventColorStyles[color];
   const eventIsPast = isPastProp ?? isPast(event.end);
+
+  const hasTopRounding = segmentPosition === "start" || segmentPosition === "full";
+  const hasBottomRounding = segmentPosition === "end" || segmentPosition === "full";
+  const showTopResize = segmentPosition === "start" || segmentPosition === "full";
+  const showBottomResize = segmentPosition === "end" || segmentPosition === "full";
 
   const [contextMenu, setContextMenu] = React.useState<{
     x: number;
@@ -305,8 +317,54 @@ export function CalendarEventItem({
     );
   }
 
+  function handleMouseMove(e: React.MouseEvent) {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const height = rect.height;
+
+    if (showTopResize && showBottomResize && height < RESIZE_HOTZONE_PX * 2) {
+      target.style.cursor = "ns-resize";
+      return;
+    }
+
+    if (showTopResize && offsetY <= RESIZE_HOTZONE_PX) {
+      target.style.cursor = "ns-resize";
+      return;
+    }
+
+    if (showBottomResize && offsetY >= height - RESIZE_HOTZONE_PX) {
+      target.style.cursor = "ns-resize";
+      return;
+    }
+
+    target.style.cursor = "pointer";
+  }
+
   function handleMouseDown(e: React.MouseEvent) {
     e.stopPropagation();
+
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const offsetY = e.clientY - rect.top;
+    const height = rect.height;
+
+    if (showTopResize && showBottomResize && height < RESIZE_HOTZONE_PX * 2) {
+      const edge = offsetY < height / 2 ? "top" : "bottom";
+      onResizeMouseDown?.(e, event, edge);
+      return;
+    }
+
+    if (showTopResize && offsetY <= RESIZE_HOTZONE_PX) {
+      onResizeMouseDown?.(e, event, "top");
+      return;
+    }
+
+    if (showBottomResize && offsetY >= height - RESIZE_HOTZONE_PX) {
+      onResizeMouseDown?.(e, event, "bottom");
+      return;
+    }
+
     onDragMouseDown?.(e, event);
   }
 
@@ -335,11 +393,14 @@ export function CalendarEventItem({
         role="button"
         tabIndex={0}
         onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         onContextMenu={handleContextMenu}
         className={cn(
-          "absolute rounded-md px-2 py-1",
+          "absolute px-2 py-1",
+          hasTopRounding && "rounded-t-md",
+          hasBottomRounding && "rounded-b-md",
           "cursor-pointer hover:z-10 focus:outline-none focus-visible:outline-none",
           "overflow-hidden select-none",
           isSelected && "z-20",
@@ -351,12 +412,18 @@ export function CalendarEventItem({
         }}
       >
         {/* Solid background layer to prevent transparency bleed-through */}
-        <div className="absolute inset-0 rounded-md bg-white dark:bg-[#191919]" />
+        <div className={cn(
+          "absolute inset-0 bg-white dark:bg-[#191919]",
+          hasTopRounding && "rounded-t-md",
+          hasBottomRounding && "rounded-b-md",
+        )} />
 
         {/* Colored background layer - uses border color when selected */}
         <div
           className={cn(
-            "absolute inset-0 rounded-md",
+            "absolute inset-0",
+            hasTopRounding && "rounded-t-md",
+            hasBottomRounding && "rounded-b-md",
             isSelected ? styles.border : styles.bg,
             eventIsPast && !isSelected && "opacity-60",
           )}
@@ -366,7 +433,9 @@ export function CalendarEventItem({
         {!isSelected && (
           <div
             className={cn(
-              "absolute left-0 top-0 bottom-0 w-[4px] rounded-l-md dark:bg-white dark:mix-blend-overlay",
+              "absolute left-0 top-0 bottom-0 w-[4px] dark:bg-white dark:mix-blend-overlay",
+              hasTopRounding && "rounded-tl-md",
+              hasBottomRounding && "rounded-bl-md",
               styles.border,
               eventIsPast && "opacity-60",
             )}
@@ -428,6 +497,12 @@ export interface AllDayEventItemProps {
   /** For multi-day events: position info */
   spanStart?: boolean;
   spanEnd?: boolean;
+  /** Mousedown handler to initiate horizontal resize */
+  onResizeMouseDown?: (
+    e: React.MouseEvent,
+    event: CalendarEvent,
+    edge: "left" | "right",
+  ) => void;
 }
 
 /**
@@ -441,6 +516,8 @@ function formatAllDayStartTime(date: Date): string {
   return format(date, "h:mm a");
 }
 
+const ALL_DAY_RESIZE_HOTZONE_PX = 6;
+
 export function AllDayEventItem({
   event,
   isPast: isPastProp,
@@ -449,6 +526,7 @@ export function AllDayEventItem({
   className,
   spanStart = true,
   spanEnd = true,
+  onResizeMouseDown,
 }: AllDayEventItemProps) {
   const color = event.color ?? "blue";
   const styles = eventColorStyles[color];
@@ -474,12 +552,54 @@ export function AllDayEventItem({
     onClick?.(event);
   }
 
+  function handleAllDayMouseMove(e: React.MouseEvent) {
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const width = rect.width;
+
+    if (spanStart && offsetX <= ALL_DAY_RESIZE_HOTZONE_PX) {
+      target.style.cursor = "ew-resize";
+      return;
+    }
+
+    if (spanEnd && offsetX >= width - ALL_DAY_RESIZE_HOTZONE_PX) {
+      target.style.cursor = "ew-resize";
+      return;
+    }
+
+    target.style.cursor = "pointer";
+  }
+
+  function handleAllDayMouseDown(e: React.MouseEvent) {
+    if (!onResizeMouseDown) return;
+
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const width = rect.width;
+
+    if (spanStart && offsetX <= ALL_DAY_RESIZE_HOTZONE_PX) {
+      e.stopPropagation();
+      onResizeMouseDown(e, event, "left");
+      return;
+    }
+
+    if (spanEnd && offsetX >= width - ALL_DAY_RESIZE_HOTZONE_PX) {
+      e.stopPropagation();
+      onResizeMouseDown(e, event, "right");
+      return;
+    }
+  }
+
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
+      onMouseMove={handleAllDayMouseMove}
+      onMouseDown={handleAllDayMouseDown}
       className={cn(
         "relative h-6 px-2 py-0.5 cursor-pointer",
         "hover:z-10 focus:outline-none focus-visible:outline-none",
@@ -514,7 +634,8 @@ export function AllDayEventItem({
       {spanStart && !isSelected && (
         <div
           className={cn(
-            "absolute left-0 top-0 bottom-0 w-[4px] rounded-l-md dark:bg-white dark:mix-blend-overlay",
+            "absolute left-0 top-0 bottom-0 w-[4px] dark:bg-white dark:mix-blend-overlay",
+            spanStart && "rounded-l-md",
             styles.border,
             eventIsPast && "opacity-60",
           )}
