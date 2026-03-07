@@ -143,7 +143,6 @@ export function CalendarEventItem({
   isSelected,
   onClick,
   dragVariant = "default",
-  isDirty,
   overrideStart,
   overrideEnd,
   onDragMouseDown,
@@ -374,7 +373,6 @@ export function CalendarEventItem({
           )}
         >
           <span className="font-medium text-[0.625rem] leading-tight break-words text-white dark:text-white flex items-center gap-0.5">
-            {isDirty && <span className="text-[0.35rem] shrink-0">\u25CF</span>}
             {event.title}
           </span>
           {heightPx >= 40 && (
@@ -531,7 +529,6 @@ export function CalendarEventItem({
                 ),
           )}
         >
-          {isDirty && <span className="text-[0.35rem] shrink-0">\u25CF</span>}
           {event.title}
         </span>
         {!isCompact && (
@@ -625,6 +622,9 @@ export function CalendarEventItem({
   );
 }
 
+/** Drag visual variant for all-day events */
+export type AllDayDragVariant = "ghost" | "placeholder" | "dragging";
+
 export interface AllDayEventItemProps {
   event: CalendarEvent;
   isPast?: boolean;
@@ -634,11 +634,11 @@ export interface AllDayEventItemProps {
   /** For multi-day events: position info */
   spanStart?: boolean;
   spanEnd?: boolean;
-  /** Mousedown handler to initiate horizontal resize */
+  /** Mousedown handler to initiate horizontal resize or drag */
   onResizeMouseDown?: (
     e: React.MouseEvent,
     event: CalendarEvent,
-    edge: "left" | "right",
+    edge: "left" | "right" | "move",
   ) => void;
   /** Callback when an event is changed (e.g. color change from context menu) */
   onEventChange?: (event: CalendarEvent) => void;
@@ -660,6 +660,8 @@ export interface AllDayEventItemProps {
    * events always show their title \u2014 \u201csticky title\u201d effect.
    */
   titleOffsetPercent?: number;
+  /** Visual variant during drag operations */
+  dragVariant?: AllDayDragVariant;
 }
 
 /**
@@ -692,12 +694,120 @@ export function AllDayEventItem({
   onPrevWeek,
   onNextWeek,
   titleOffsetPercent = 0,
+  dragVariant,
 }: AllDayEventItemProps) {
   const color = event.color ?? "blue";
   const styles = eventColorStyles[color];
   const { view, boundaryRight, headerBottom } = useCalendarPopoverBoundary();
   const isDayView = view === "day";
   const eventIsPast = isPastProp ?? isPast(event.end);
+
+  const [contextMenu, setContextMenu] = React.useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const closeContextMenu = React.useCallback(() => {
+    setContextMenu(null);
+    onContextMenuOpenChange?.(false);
+  }, [onContextMenuOpenChange]);
+
+  // Ghost: faded version at original position during move
+  if (dragVariant === "ghost") {
+    return (
+      <div
+        className={cn(
+          "relative h-6 px-2 py-0.5 pointer-events-none opacity-30",
+          "overflow-hidden select-none flex items-center gap-1",
+          spanStart && "rounded-l-md",
+          spanEnd && "rounded-r-md",
+          className,
+        )}
+      >
+        <div
+          className={cn(
+            "absolute inset-0 bg-white dark:bg-[#191919]",
+            spanStart && "rounded-l-md",
+            spanEnd && "rounded-r-md",
+          )}
+        />
+        <div
+          className={cn(
+            "absolute inset-0",
+            styles.bg,
+            spanStart && "rounded-l-md",
+            spanEnd && "rounded-r-md",
+          )}
+        />
+        {spanStart && (
+          <div
+            className={cn(
+              "absolute left-0 top-0 bottom-0 w-[4px] dark:bg-white dark:mix-blend-overlay",
+              spanStart && "rounded-l-md",
+              styles.border,
+            )}
+          />
+        )}
+        <span
+          className={cn(
+            "relative font-medium text-[0.625rem] leading-tight whitespace-nowrap",
+            spanStart && "pl-1",
+            styles.text,
+            "dark:text-white/80",
+          )}
+        >
+          {event.title}
+        </span>
+      </div>
+    );
+  }
+
+  // Placeholder: border-only outline at target position
+  if (dragVariant === "placeholder") {
+    return (
+      <div
+        className={cn(
+          "relative h-6 pointer-events-none border-2 rounded-md",
+          styles.borderLine,
+          className,
+        )}
+      />
+    );
+  }
+
+  // Dragging copy: floating replica following cursor
+  if (dragVariant === "dragging") {
+    return (
+      <div
+        className={cn(
+          "h-6 px-2 py-0.5 pointer-events-none cursor-grabbing",
+          "overflow-hidden select-none flex items-center gap-1",
+          "rounded-md opacity-80 shadow-lg",
+          className,
+        )}
+      >
+        <div className="absolute inset-0 rounded-md bg-white dark:bg-[#191919]" />
+        <div
+          className={cn("absolute inset-0 rounded-md", styles.bg)}
+        />
+        <div
+          className={cn(
+            "absolute left-0 top-0 bottom-0 w-[4px] rounded-l-md dark:bg-white dark:mix-blend-overlay",
+            styles.border,
+          )}
+        />
+        <span
+          className={cn(
+            "relative font-medium text-[0.625rem] leading-tight whitespace-nowrap pl-1",
+            styles.text,
+            "dark:text-white/80",
+          )}
+        >
+          {event.title}
+        </span>
+      </div>
+    );
+  }
 
   // Check if event has a specific start time (not midnight)
   const hasStartTime =
@@ -735,7 +845,7 @@ export function AllDayEventItem({
       return;
     }
 
-    target.style.cursor = "pointer";
+    target.style.cursor = "grab";
   }
 
   function handleAllDayMouseDown(e: React.MouseEvent) {
@@ -757,17 +867,11 @@ export function AllDayEventItem({
       onResizeMouseDown(e, event, "right");
       return;
     }
+
+    // Middle area: initiate drag (move)
+    e.stopPropagation();
+    onResizeMouseDown(e, event, "move");
   }
-
-  const [contextMenu, setContextMenu] = React.useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const closeContextMenu = React.useCallback(() => {
-    setContextMenu(null);
-    onContextMenuOpenChange?.(false);
-  }, [onContextMenuOpenChange]);
 
   function handleContextMenu(e: React.MouseEvent) {
     e.preventDefault();

@@ -144,7 +144,6 @@ export function WeekView({
   onDateChange,
   onVisibleDaysChange,
   onEventChange,
-  dirtyEventIds,
   isSidebarOpen,
   onDockToSidebar,
   onClosePopover,
@@ -402,6 +401,7 @@ export function WeekView({
               onNextWeek={onNextWeek}
               visibleStartIndex={dynamicBuffer}
               visibleCount={VISIBLE_DAYS}
+              dayColumnWidth={dayColumnWidth}
             />
           </div>
         </div>
@@ -430,7 +430,6 @@ export function WeekView({
                   resizeState={resizeState ?? undefined}
                   onEventResizeMouseDown={handleResizeMouseDown}
                   onEventChange={onEventChange}
-                  dirtyEventIds={dirtyEventIds}
                   onContextMenuOpenChange={setContextMenuOpen}
                   isSidebarOpen={isSidebarOpen}
                   onDockToSidebar={onDockToSidebar}

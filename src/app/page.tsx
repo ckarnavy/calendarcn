@@ -47,9 +47,6 @@ function PageContent() {
     startOfWeek(new Date(), { weekStartsOn: 0 }),
   );
   const [events, setEvents] = React.useState(() => generateMockEvents());
-  const [dirtyEventIds, setDirtyEventIds] = React.useState(
-    () => new Set<string>(),
-  );
   const [selectedEventId, setSelectedEventId] = React.useState<string | null>(
     null,
   );
@@ -62,7 +59,6 @@ function PageContent() {
     setEvents((prev) =>
       prev.map((e) => (e.id === updatedEvent.id ? updatedEvent : e)),
     );
-    setDirtyEventIds((prev) => new Set(prev).add(updatedEvent.id));
   }, []);
 
   const goToToday = React.useCallback(() => {
@@ -338,7 +334,6 @@ function PageContent() {
             onDateChange={goToDate}
             onVisibleDaysChange={setVisibleDays}
             onEventChange={handleEventChange}
-            dirtyEventIds={dirtyEventIds}
             isSidebarOpen={rightSidebarOpen}
             onDockToSidebar={() => {
               if (!rightSidebarOpen) toggleSidebar();

@@ -20,7 +20,7 @@ interface UseAllDayResizeReturn {
   handleAllDayResizeMouseDown: (
     e: React.MouseEvent,
     event: CalendarEvent,
-    edge: "left" | "right",
+    edge: "left" | "right" | "move",
     startColumn: number,
     endColumn: number,
   ) => void;
@@ -37,11 +37,17 @@ function clamp(value: number, min: number, max: number): number {
 interface ResizeInfo {
   eventId: string;
   event: CalendarEvent;
-  edge: "left" | "right";
+  edge: "left" | "right" | "move";
   startClientX: number;
   isResizing: boolean;
   originalStartColumn: number;
   originalEndColumn: number;
+  /** Column index at the initial mousedown position (used for move delta) */
+  startColumnIndex: number;
+  /** Offset from cursor to event left edge at mousedown (px) */
+  cursorOffsetX: number;
+  /** Offset from cursor to event top edge at mousedown (px) */
+  cursorOffsetY: number;
 }
 
 export function useAllDayResize({
@@ -101,7 +107,8 @@ export function useAllDayResize({
 
       if (!resize.isResizing) {
         resize.isResizing = true;
-        document.body.style.cursor = "ew-resize";
+        document.body.style.cursor =
+          resize.edge === "move" ? "grabbing" : "ew-resize";
       }
 
       const container = allDayContainerRef.current;
@@ -119,7 +126,16 @@ export function useAllDayResize({
       let newStartColumn = resize.originalStartColumn;
       let newEndColumn = resize.originalEndColumn;
 
-      if (resize.edge === "right") {
+      if (resize.edge === "move") {
+        const span = resize.originalEndColumn - resize.originalStartColumn;
+        const delta = columnIndex - resize.startColumnIndex;
+        newStartColumn = clamp(
+          resize.originalStartColumn + delta,
+          0,
+          currentDays.length - 1 - span,
+        );
+        newEndColumn = newStartColumn + span;
+      } else if (resize.edge === "right") {
         newEndColumn = Math.max(columnIndex, resize.originalStartColumn);
       } else {
         newStartColumn = Math.min(columnIndex, resize.originalEndColumn);
@@ -134,6 +150,14 @@ export function useAllDayResize({
         currentEndColumn: newEndColumn,
         edge: resize.edge,
         isResizing: true,
+        ...(resize.edge === "move"
+          ? {
+              clientX: e.clientX,
+              clientY: e.clientY,
+              cursorOffsetX: resize.cursorOffsetX,
+              cursorOffsetY: resize.cursorOffsetY,
+            }
+          : {}),
       });
     };
 
@@ -173,14 +197,19 @@ export function useAllDayResize({
             event.end.getMilliseconds(),
           );
 
+          // Move preserves the original isAllDay flag (duration unchanged).
+          // Resize determines isAllDay by whether the span exceeds 24h.
+          const isMove = resize.edge === "move";
           const MS_IN_24H = 24 * 60 * 60 * 1000;
-          const isLongerThan24h = newEnd.getTime() - newStart.getTime() > MS_IN_24H;
+          const isLongerThan24h =
+            newEnd.getTime() - newStart.getTime() > MS_IN_24H;
+          const isAllDay = isMove ? event.isAllDay === true : isLongerThan24h;
 
           onEventChangeRef.current?.({
             ...event,
             start: newStart,
             end: newEnd,
-            isAllDay: isLongerThan24h,
+            isAllDay,
           });
 
           return null;
@@ -197,7 +226,7 @@ export function useAllDayResize({
     (
       e: React.MouseEvent,
       event: CalendarEvent,
-      edge: "left" | "right",
+      edge: "left" | "right" | "move",
       startColumn: number,
       endColumn: number,
     ) => {
@@ -207,6 +236,24 @@ export function useAllDayResize({
 
       onEventClickRef.current?.(event);
 
+      // Compute the column under the cursor at mousedown for move delta
+      const container = allDayContainerRef.current;
+      let startColumnIndex = startColumn;
+      let cursorOffsetX = 0;
+      const cursorOffsetY = 0;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const colWidth = dayColumnWidthRef.current;
+        startColumnIndex = clamp(
+          Math.floor((e.clientX - rect.left) / colWidth),
+          0,
+          daysRef.current.length - 1,
+        );
+        // Compute offset from cursor to the event element's top-left
+        const eventLeft = rect.left + startColumn * colWidth;
+        cursorOffsetX = e.clientX - eventLeft;
+      }
+
       resizeRef.current = {
         eventId: event.id,
         event,
@@ -215,6 +262,9 @@ export function useAllDayResize({
         isResizing: false,
         originalStartColumn: startColumn,
         originalEndColumn: endColumn,
+        startColumnIndex,
+        cursorOffsetX,
+        cursorOffsetY,
       };
 
       setAllDayResizeState({
@@ -235,7 +285,7 @@ export function useAllDayResize({
         window.addEventListener("mouseup", handleMouseUpRef.current);
       }
     },
-    [],
+    [allDayContainerRef],
   );
 
   useEffect(() => {
