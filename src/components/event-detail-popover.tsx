@@ -93,7 +93,7 @@ export function EventDetailPopover({
         right: 16,
       }}
       collisionBoundary={effectiveBoundary}
-      className="w-[320px] max-h-[80vh] overflow-y-auto p-0 bg-popover/80 backdrop-blur-xl border shadow-lg rounded-lg"
+      className="w-[320px] max-h-[80vh] overflow-y-auto p-0 bg-popover/60 backdrop-blur-xl border shadow-lg rounded-lg"
       onOpenAutoFocus={(e) => e.preventDefault()}
       onCloseAutoFocus={(e) => e.preventDefault()}
     >

@@ -402,6 +402,7 @@ export function WeekView({
               onNextWeek={onNextWeek}
               visibleStartIndex={dynamicBuffer}
               visibleCount={VISIBLE_DAYS}
+              dayColumnWidth={dayColumnWidth}
             />
           </div>
         </div>

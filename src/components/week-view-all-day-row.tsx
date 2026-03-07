@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { isPast, isSameDay } from "date-fns";
 import { useCallback } from "react";
@@ -34,6 +35,7 @@ export function WeekViewAllDayRow({
   onNextWeek,
   visibleStartIndex,
   visibleCount,
+  dayColumnWidth,
   className,
 }: WeekViewAllDayRowProps) {
   const allEventRows = calculateAllDayEventRows(allDayEvents, days);
@@ -55,6 +57,9 @@ export function WeekViewAllDayRow({
     eventRows.length > 0 ? Math.max(...eventRows.map((r) => r.row)) + 1 : 0;
   const contentHeight =
     maxRow > 0 ? maxRow * (ALL_DAY_EVENT_HEIGHT + ALL_DAY_ROW_GAP) + 8 : 32;
+
+  const isMoveDrag =
+    allDayResizeState?.isResizing && allDayResizeState.edge === "move";
 
   return (
     <div
@@ -98,11 +103,20 @@ export function WeekViewAllDayRow({
                 const isBeingResized =
                   allDayResizeState?.eventId === event.id &&
                   allDayResizeState.isResizing;
+                const isBeingMoved =
+                  isBeingResized && allDayResizeState.edge === "move";
+
+                // For move: ghost stays at original, event renders at target
+                // For resize: event renders at target (current columns)
                 const displayStartColumn = isBeingResized
-                  ? allDayResizeState.currentStartColumn
+                  ? isBeingMoved
+                    ? startColumn
+                    : allDayResizeState.currentStartColumn
                   : startColumn;
                 const displayEndColumn = isBeingResized
-                  ? allDayResizeState.currentEndColumn
+                  ? isBeingMoved
+                    ? endColumn
+                    : allDayResizeState.currentEndColumn
                   : endColumn;
 
                 return (
@@ -120,6 +134,7 @@ export function WeekViewAllDayRow({
                     originalStartColumn={startColumn}
                     originalEndColumn={endColumn}
                     isBeingResized={isBeingResized}
+                    isBeingMoved={isBeingMoved}
                     onEventChange={onEventChange}
                     onContextMenuOpenChange={onContextMenuOpenChange}
                     isSidebarOpen={isSidebarOpen}
@@ -131,10 +146,75 @@ export function WeekViewAllDayRow({
                   />
                 );
               })}
+
+              {/* Placeholder at target position during move */}
+              {isMoveDrag &&
+                (() => {
+                  const movedRow = eventRows.find(
+                    (r) => r.event.id === allDayResizeState.eventId,
+                  );
+                  if (!movedRow) return null;
+                  return (
+                    <AllDayPlaceholderRow
+                      event={movedRow.event}
+                      startColumn={allDayResizeState.currentStartColumn}
+                      endColumn={allDayResizeState.currentEndColumn}
+                      row={movedRow.row}
+                      totalColumns={days.length}
+                    />
+                  );
+                })()}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Floating drag copy via portal */}
+      {isMoveDrag &&
+        allDayResizeState.clientX != null &&
+        allDayResizeState.clientY != null &&
+        (() => {
+          const movedRow = eventRows.find(
+            (r) => r.event.id === allDayResizeState.eventId,
+          );
+          if (!movedRow) return null;
+          const span =
+            movedRow.endColumn - movedRow.startColumn + 1;
+          const colWidthPx = dayColumnWidth ?? 100;
+          const floatingWidth = span * colWidthPx;
+          const offsetX = allDayResizeState.cursorOffsetX ?? 0;
+
+          return createPortal(
+            <div
+              className="pointer-events-none"
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                width: "100vw",
+                height: "100vh",
+                zIndex: 9999,
+              }}
+            >
+              <div
+                style={{
+                  position: "fixed",
+                  left: `${allDayResizeState.clientX - offsetX}px`,
+                  top: `${allDayResizeState.clientY - (allDayResizeState.cursorOffsetY ?? 12)}px`,
+                  width: `${floatingWidth}px`,
+                }}
+              >
+                <AllDayEventItem
+                  event={movedRow.event}
+                  spanStart
+                  spanEnd
+                  dragVariant="dragging"
+                />
+              </div>
+            </div>,
+            document.body,
+          );
+        })()}
     </div>
   );
 }
@@ -152,6 +232,7 @@ interface AllDayEventRowProps {
   originalStartColumn: number;
   originalEndColumn: number;
   isBeingResized?: boolean;
+  isBeingMoved?: boolean;
   /** Callback when an event is changed (e.g. color change from context menu) */
   onEventChange?: (event: CalendarEvent) => void;
   /** Callback when context menu open state changes */
@@ -178,6 +259,7 @@ function AllDayEventRow({
   originalStartColumn,
   originalEndColumn,
   isBeingResized,
+  isBeingMoved,
   onEventChange,
   onContextMenuOpenChange,
   isSidebarOpen,
@@ -228,7 +310,11 @@ function AllDayEventRow({
       : 0;
 
   const handleResizeMouseDown = useCallback(
-    (e: React.MouseEvent, ev: CalendarEvent, edge: "left" | "right") => {
+    (
+      e: React.MouseEvent,
+      ev: CalendarEvent,
+      edge: "left" | "right" | "move",
+    ) => {
       onAllDayResizeMouseDown?.(
         e,
         ev,
@@ -254,7 +340,7 @@ function AllDayEventRow({
       <AllDayEventItem
         event={event}
         isPast={isPast(event.end)}
-        isSelected={isSelected}
+        isSelected={isBeingMoved ? false : isSelected}
         onClick={onEventClick}
         spanStart={spanStart}
         spanEnd={spanEnd}
@@ -267,7 +353,46 @@ function AllDayEventRow({
         onPrevWeek={onPrevWeek}
         onNextWeek={onNextWeek}
         titleOffsetPercent={titleOffsetPercent}
+        dragVariant={isBeingMoved ? "ghost" : undefined}
       />
+    </div>
+  );
+}
+
+/** Placeholder border-only outline rendered at the target position during move */
+function AllDayPlaceholderRow({
+  event,
+  startColumn,
+  endColumn,
+  row,
+  totalColumns,
+}: {
+  event: CalendarEvent;
+  startColumn: number;
+  endColumn: number;
+  row: number;
+  totalColumns: number;
+}) {
+  const columnWidth = 100 / totalColumns;
+  const left = (startColumn / totalColumns) * 100;
+  const rightGap = columnWidth * 0.08;
+  const width =
+    ((endColumn - startColumn + 1) / totalColumns) * 100 - rightGap;
+  const top = row * (ALL_DAY_EVENT_HEIGHT + ALL_DAY_ROW_GAP);
+
+  return (
+    <div
+      className="absolute pointer-events-none"
+      style={{
+        left: `${left}%`,
+        width: `${width}%`,
+        top: `${top}px`,
+        paddingLeft: "2px",
+        paddingRight: "2px",
+        zIndex: 25,
+      }}
+    >
+      <AllDayEventItem event={event} spanStart spanEnd dragVariant="placeholder" />
     </div>
   );
 }

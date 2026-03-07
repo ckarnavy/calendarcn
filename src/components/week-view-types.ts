@@ -175,11 +175,11 @@ export interface WeekViewAllDayRowProps {
   scrollStyle?: React.CSSProperties;
   /** Current all-day resize state */
   allDayResizeState?: AllDayResizeState;
-  /** Mousedown handler to initiate all-day event resize */
+  /** Mousedown handler to initiate all-day event resize or drag */
   onAllDayResizeMouseDown?: (
     e: React.MouseEvent,
     event: CalendarEvent,
-    edge: "left" | "right",
+    edge: "left" | "right" | "move",
     startColumn: number,
     endColumn: number,
   ) => void;
@@ -203,6 +203,8 @@ export interface WeekViewAllDayRowProps {
   visibleStartIndex?: number;
   /** Number of visible columns (defaults to days.length when omitted) */
   visibleCount?: number;
+  /** Width of a single day column in pixels (for floating drag copy sizing) */
+  dayColumnWidth?: number;
   /** Optional className */
   className?: string;
 }
@@ -364,10 +366,18 @@ export interface AllDayResizeState {
   currentStartColumn: number;
   /** Current end column index during resize */
   currentEndColumn: number;
-  /** Which edge is being dragged */
-  edge: "left" | "right";
+  /** Which edge is being dragged, or "move" for drag-and-drop */
+  edge: "left" | "right" | "move";
   /** Whether the drag threshold has been met */
   isResizing: boolean;
+  /** Viewport-relative cursor X during move (for floating copy) */
+  clientX?: number;
+  /** Viewport-relative cursor Y during move (for floating copy) */
+  clientY?: number;
+  /** Offset from cursor to event left edge at mousedown (px) */
+  cursorOffsetX?: number;
+  /** Offset from cursor to event top edge at mousedown (px) */
+  cursorOffsetY?: number;
 }
 
 /**
