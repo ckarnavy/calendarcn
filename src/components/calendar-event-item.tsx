@@ -1,10 +1,16 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { format, isPast } from "date-fns";
-import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { EventDetailPopover } from "./event-detail-popover";
+import { useCalendarPopoverBoundary } from "./calendar-popover-context";
 import type {
   CalendarEvent,
   CalendarEventItemProps,
@@ -14,7 +20,13 @@ import { EventContextMenu } from "./event-context-menu";
 
 const eventColorStyles: Record<
   EventColor,
-  { bg: string; bgHover: string; border: string; borderLine: string; text: string }
+  {
+    bg: string;
+    bgHover: string;
+    border: string;
+    borderLine: string;
+    text: string;
+  }
 > = {
   red: {
     bg: "bg-event-red-bg",
@@ -103,7 +115,8 @@ function computeOverrideStyle(
   overrideStart: Date,
   overrideEnd: Date,
 ) {
-  const startMinutes = overrideStart.getHours() * 60 + overrideStart.getMinutes();
+  const startMinutes =
+    overrideStart.getHours() * 60 + overrideStart.getMinutes();
   let endMinutes = overrideEnd.getHours() * 60 + overrideEnd.getMinutes();
   // If end is midnight and on a different day than start, treat as 1440 (end of day)
   if (endMinutes === 0 && overrideEnd.getDate() !== overrideStart.getDate()) {
@@ -152,11 +165,44 @@ export function CalendarEventItem({
   const color = event.color ?? "blue";
   const styles = eventColorStyles[color];
   const eventIsPast = isPastProp ?? isPast(event.end);
+  const { view, boundaryRight, headerBottom } = useCalendarPopoverBoundary();
+  const isDayView = view === "day";
 
-  const hasTopRounding = segmentPosition === "start" || segmentPosition === "full";
-  const hasBottomRounding = segmentPosition === "end" || segmentPosition === "full";
-  const showTopResize = segmentPosition === "start" || segmentPosition === "full";
-  const showBottomResize = segmentPosition === "end" || segmentPosition === "full";
+  /** Ref to the event button element, used to measure its viewport rect. */
+  const eventRef = React.useRef<HTMLDivElement>(null);
+
+  /**
+   * Viewport-relative top & height of the event element.
+   * Used to vertically align the day-view PopoverAnchor with the event
+   * so the popover appears beside the event rather than at a fixed position.
+   */
+  const [anchorRect, setAnchorRect] = React.useState<{
+    top: number;
+    height: number;
+  } | null>(null);
+
+  const showPopover = isSelected && isSidebarOpen === false;
+
+  // Measure the event element's viewport position when the popover opens in
+  // day view. useLayoutEffect ensures the measurement happens before paint so
+  // the PopoverAnchor is positioned correctly on first frame.
+  React.useLayoutEffect(() => {
+    if (!showPopover || !isDayView || !eventRef.current) {
+      setAnchorRect(null);
+      return;
+    }
+    const rect = eventRef.current.getBoundingClientRect();
+    setAnchorRect({ top: rect.top, height: rect.height });
+  }, [showPopover, isDayView]);
+
+  const hasTopRounding =
+    segmentPosition === "start" || segmentPosition === "full";
+  const hasBottomRounding =
+    segmentPosition === "end" || segmentPosition === "full";
+  const showTopResize =
+    segmentPosition === "start" || segmentPosition === "full";
+  const showBottomResize =
+    segmentPosition === "end" || segmentPosition === "full";
 
   const [contextMenu, setContextMenu] = React.useState<{
     x: number;
@@ -187,7 +233,12 @@ export function CalendarEventItem({
 
   const posStyle =
     overrideStart && overrideEnd
-      ? computeOverrideStyle(positionedEvent, hourHeight, overrideStart, overrideEnd)
+      ? computeOverrideStyle(
+          positionedEvent,
+          hourHeight,
+          overrideStart,
+          overrideEnd,
+        )
       : defaultStyle;
 
   const heightInPixels =
@@ -226,11 +277,23 @@ export function CalendarEventItem({
             isCompact && "flex-row items-center gap-1",
           )}
         >
-          <span className={cn("font-medium text-[0.625rem] leading-tight break-words", styles.text, "dark:text-white/80")}>
+          <span
+            className={cn(
+              "font-medium text-[0.625rem] leading-tight break-words",
+              styles.text,
+              "dark:text-white/80",
+            )}
+          >
             {event.title}
           </span>
           {!isCompact && (
-            <span className={cn("text-[0.625rem] whitespace-nowrap", styles.text, "dark:text-white dark:mix-blend-overlay")}>
+            <span
+              className={cn(
+                "text-[0.625rem] whitespace-nowrap",
+                styles.text,
+                "dark:text-white dark:mix-blend-overlay",
+              )}
+            >
               {formatEventTimeRange(event)}
             </span>
           )}
@@ -394,10 +457,9 @@ export function CalendarEventItem({
     onContextMenuOpenChange?.(true);
   }
 
-  const showPopover = isSelected && isSidebarOpen === false;
-
   const eventElement = (
     <div
+      ref={eventRef}
       role="button"
       tabIndex={0}
       onMouseDown={handleMouseDown}
@@ -420,11 +482,13 @@ export function CalendarEventItem({
       }}
     >
       {/* Solid background layer to prevent transparency bleed-through */}
-      <div className={cn(
-        "absolute inset-0 bg-white dark:bg-[#191919]",
-        hasTopRounding && "rounded-t-md",
-        hasBottomRounding && "rounded-b-md",
-      )} />
+      <div
+        className={cn(
+          "absolute inset-0 bg-white dark:bg-[#191919]",
+          hasTopRounding && "rounded-t-md",
+          hasBottomRounding && "rounded-b-md",
+        )}
+      />
 
       {/* Colored background layer - uses border color when selected */}
       <div
@@ -460,7 +524,11 @@ export function CalendarEventItem({
             "font-medium text-[0.625rem] leading-tight break-words flex items-center gap-0.5",
             isSelected
               ? "text-white dark:text-white"
-              : cn(styles.text, "dark:text-white/80", eventIsPast && "opacity-60"),
+              : cn(
+                  styles.text,
+                  "dark:text-white/80",
+                  eventIsPast && "opacity-60",
+                ),
           )}
         >
           {isDirty && <span className="text-[0.35rem] shrink-0">●</span>}
@@ -489,16 +557,45 @@ export function CalendarEventItem({
   if (showPopover) {
     return (
       <>
-        <Popover open onOpenChange={(open) => { if (!open) onClosePopover?.(); }}>
-          <PopoverTrigger asChild>
-            {eventElement}
-          </PopoverTrigger>
+        <Popover
+          open
+          onOpenChange={(open) => {
+            if (!open) onClosePopover?.();
+          }}
+        >
+          <PopoverTrigger asChild>{eventElement}</PopoverTrigger>
+          {/*
+           * In day view the event spans the full grid width, so Radix can't
+           * fit the popover beside the trigger. Place a zero-width anchor at
+           * the RIGHT edge of the calendar boundary and use side="left" so
+           * the popover extends leftward — matching Notion Calendar.
+           *
+           * The anchor is portaled to document.body to escape scroll
+           * containers that apply CSS transforms (which break position:fixed
+           * by creating a new containing block).
+           */}
+          {isDayView &&
+            createPortal(
+              <PopoverAnchor
+                className="pointer-events-none"
+                style={{
+                  position: "fixed",
+                  left: boundaryRight,
+                  top: anchorRect?.top ?? 0,
+                  height: anchorRect?.height ?? 0,
+                  width: 0,
+                }}
+              />,
+              document.body,
+            )}
           <EventDetailPopover
             event={event}
             onClose={() => onClosePopover?.()}
             onDockToSidebar={() => onDockToSidebar?.()}
             onPrevWeek={onPrevWeek}
             onNextWeek={onNextWeek}
+            side={isDayView ? "left" : "right"}
+            collisionPaddingTop={isDayView ? headerBottom : undefined}
           />
         </Popover>
         {contextMenu && (
@@ -553,6 +650,12 @@ export interface AllDayEventItemProps {
   onPrevWeek?: () => void;
   /** Navigate to next week */
   onNextWeek?: () => void;
+  /**
+   * Percentage of the event's width that is hidden off-screen to the left.
+   * Used in day view to offset the title into the visible area so multi-day
+   * events always show their title — "sticky title" effect.
+   */
+  titleOffsetPercent?: number;
 }
 
 /**
@@ -582,9 +685,12 @@ export function AllDayEventItem({
   onClosePopover,
   onPrevWeek,
   onNextWeek,
+  titleOffsetPercent = 0,
 }: AllDayEventItemProps) {
   const color = event.color ?? "blue";
   const styles = eventColorStyles[color];
+  const { view, boundaryRight, headerBottom } = useCalendarPopoverBoundary();
+  const isDayView = view === "day";
   const eventIsPast = isPastProp ?? isPast(event.end);
 
   // Check if event has a specific start time (not midnight)
@@ -666,6 +772,11 @@ export function AllDayEventItem({
         isSelected && "z-20",
         className,
       )}
+      style={
+        titleOffsetPercent > 0
+          ? { paddingLeft: `${titleOffsetPercent}%` }
+          : undefined
+      }
     >
       {/* Solid background layer to prevent transparency bleed-through */}
       <div
@@ -704,7 +815,11 @@ export function AllDayEventItem({
           spanStart && "pl-1",
           isSelected
             ? "text-white dark:text-white"
-            : cn(styles.text, "dark:text-white/80", eventIsPast && "opacity-60"),
+            : cn(
+                styles.text,
+                "dark:text-white/80",
+                eventIsPast && "opacity-60",
+              ),
         )}
       >
         {event.title}
@@ -730,18 +845,43 @@ export function AllDayEventItem({
 
   if (showPopover) {
     return (
-      <Popover open onOpenChange={(open) => { if (!open) onClosePopover?.(); }}>
-        <PopoverTrigger asChild>
-          {eventElement}
-        </PopoverTrigger>
+      <Popover
+        open
+        onOpenChange={(open) => {
+          if (!open) onClosePopover?.();
+        }}
+      >
+        <PopoverTrigger asChild>{eventElement}</PopoverTrigger>
+        {/*
+         * In day view, all-day events span the full width. Portal the
+         * anchor to document.body (escaping transformed scroll containers)
+         * and position it at the calendar boundary's right edge so the
+         * popover always appears at the visible right edge — even when the
+         * event wrapper extends into off-screen buffer days.
+         */}
+        {isDayView &&
+          createPortal(
+            <PopoverAnchor
+              className="pointer-events-none"
+              style={{
+                position: "fixed",
+                left: boundaryRight,
+                top: 0,
+                bottom: 0,
+                width: 0,
+              }}
+            />,
+            document.body,
+          )}
         <EventDetailPopover
           event={event}
           onClose={() => onClosePopover?.()}
           onDockToSidebar={() => onDockToSidebar?.()}
           onPrevWeek={onPrevWeek}
           onNextWeek={onNextWeek}
-          side="right"
+          side={isDayView ? "left" : "right"}
           align="start"
+          collisionPaddingTop={isDayView ? headerBottom : undefined}
         />
       </Popover>
     );
