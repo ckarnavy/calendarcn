@@ -144,7 +144,6 @@ export function WeekView({
   onDateChange,
   onVisibleDaysChange,
   onEventChange,
-  dirtyEventIds,
   isSidebarOpen,
   onDockToSidebar,
   onClosePopover,
@@ -431,7 +430,6 @@ export function WeekView({
                   resizeState={resizeState ?? undefined}
                   onEventResizeMouseDown={handleResizeMouseDown}
                   onEventChange={onEventChange}
-                  dirtyEventIds={dirtyEventIds}
                   onContextMenuOpenChange={setContextMenuOpen}
                   isSidebarOpen={isSidebarOpen}
                   onDockToSidebar={onDockToSidebar}

@@ -53,8 +53,6 @@ export interface WeekViewProps {
   onVisibleDaysChange?: (days: Date[]) => void;
   /** Callback when an event is changed (e.g. dragged to a new time) */
   onEventChange?: (event: CalendarEvent) => void;
-  /** Set of event IDs with unsaved changes */
-  dirtyEventIds?: Set<string>;
   /** Whether the right sidebar is open */
   isSidebarOpen?: boolean;
   /** Callback to dock popover to sidebar (opens sidebar) */
@@ -123,8 +121,6 @@ export interface WeekViewGridProps {
   ) => void;
   /** Callback when an event is changed (e.g. color change from context menu) */
   onEventChange?: (event: CalendarEvent) => void;
-  /** Set of event IDs with unsaved changes */
-  dirtyEventIds?: Set<string>;
   /** Callback when context menu open state changes */
   onContextMenuOpenChange?: (open: boolean) => void;
   /** Whether the right sidebar is open */
@@ -396,8 +392,6 @@ export interface CalendarEventItemProps {
   onClick?: (event: CalendarEvent) => void;
   /** Drag variant for visual state during drag */
   dragVariant?: EventDragVariant;
-  /** Whether this event has unsaved changes */
-  isDirty?: boolean;
   /** Override start time (for dragging/placeholder positioning) */
   overrideStart?: Date;
   /** Override end time (for dragging/placeholder positioning) */

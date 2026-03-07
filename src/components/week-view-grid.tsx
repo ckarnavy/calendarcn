@@ -32,7 +32,6 @@ export function WeekViewGrid({
   resizeState,
   onEventResizeMouseDown,
   onEventChange,
-  dirtyEventIds,
   onContextMenuOpenChange,
   isSidebarOpen,
   onDockToSidebar,
@@ -117,7 +116,7 @@ export function WeekViewGrid({
               resizeState={resizeState}
               onEventResizeMouseDown={onEventResizeMouseDown}
               onEventChange={onEventChange}
-              dirtyEventIds={dirtyEventIds}
+
               onContextMenuOpenChange={onContextMenuOpenChange}
               isSidebarOpen={isSidebarOpen}
               onDockToSidebar={onDockToSidebar}
@@ -157,7 +156,6 @@ export function WeekViewGrid({
           days={days}
           hourHeight={hourHeight}
           dragState={dragState}
-          dirtyEventIds={dirtyEventIds}
           gridWidth={gridWidth}
         />
       )}
@@ -383,7 +381,6 @@ interface FloatingDragCopyProps {
   days: WeekViewGridProps["days"];
   hourHeight: number;
   dragState: EventDragState;
-  dirtyEventIds?: Set<string>;
   gridWidth: number;
 }
 
@@ -391,7 +388,6 @@ function FloatingDragCopy({
   days,
   hourHeight,
   dragState,
-  dirtyEventIds,
   gridWidth,
 }: FloatingDragCopyProps) {
   const floatingPositioned: PositionedEvent = {
@@ -404,7 +400,6 @@ function FloatingDragCopy({
     totalColumns: 1,
   };
 
-  const isDirty = dirtyEventIds?.has(dragState.eventId);
   const durationMinutes =
     (dragState.currentEnd.getTime() - dragState.currentStart.getTime()) / 60000;
   const heightPx = (durationMinutes / 60) * hourHeight;
@@ -428,7 +423,6 @@ function FloatingDragCopy({
         positionedEvent={floatingPositioned}
         hourHeight={hourHeight}
         dragVariant="dragging"
-        isDirty={isDirty}
         overrideStart={dragState.currentStart}
         overrideEnd={dragState.currentEnd}
         cursorY={dragState.clientY}
@@ -456,7 +450,6 @@ interface DayEventsColumnProps {
     edge: "top" | "bottom",
   ) => void;
   onEventChange?: (event: CalendarEvent) => void;
-  dirtyEventIds?: Set<string>;
   onContextMenuOpenChange?: (open: boolean) => void;
   isSidebarOpen?: boolean;
   onDockToSidebar?: () => void;
@@ -490,7 +483,6 @@ function DayEventsColumn({
   resizeState,
   onEventResizeMouseDown,
   onEventChange,
-  dirtyEventIds,
   onContextMenuOpenChange,
   isSidebarOpen,
   onDockToSidebar,
@@ -571,7 +563,6 @@ function DayEventsColumn({
                 overrideStart={displayStart}
                 overrideEnd={displayEnd}
                 onEventChange={onEventChange}
-                isDirty={dirtyEventIds?.has(eventId)}
               />
             </React.Fragment>
           );
@@ -588,7 +579,6 @@ function DayEventsColumn({
             onDragMouseDown={onEventDragMouseDown}
             onResizeMouseDown={onEventResizeMouseDown}
             onEventChange={onEventChange}
-            isDirty={dirtyEventIds?.has(eventId)}
             onContextMenuOpenChange={onContextMenuOpenChange}
             isSidebarOpen={isSidebarOpen}
             onDockToSidebar={onDockToSidebar}

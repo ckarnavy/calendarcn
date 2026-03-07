@@ -143,7 +143,6 @@ export function CalendarEventItem({
   isSelected,
   onClick,
   dragVariant = "default",
-  isDirty,
   overrideStart,
   overrideEnd,
   onDragMouseDown,
@@ -374,7 +373,6 @@ export function CalendarEventItem({
           )}
         >
           <span className="font-medium text-[0.625rem] leading-tight break-words text-white dark:text-white flex items-center gap-0.5">
-            {isDirty && <span className="text-[0.35rem] shrink-0">\u25CF</span>}
             {event.title}
           </span>
           {heightPx >= 40 && (
@@ -531,7 +529,6 @@ export function CalendarEventItem({
                 ),
           )}
         >
-          {isDirty && <span className="text-[0.35rem] shrink-0">\u25CF</span>}
           {event.title}
         </span>
         {!isCompact && (
@@ -705,6 +702,16 @@ export function AllDayEventItem({
   const isDayView = view === "day";
   const eventIsPast = isPastProp ?? isPast(event.end);
 
+  const [contextMenu, setContextMenu] = React.useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const closeContextMenu = React.useCallback(() => {
+    setContextMenu(null);
+    onContextMenuOpenChange?.(false);
+  }, [onContextMenuOpenChange]);
+
   // Ghost: faded version at original position during move
   if (dragVariant === "ghost") {
     return (
@@ -865,16 +872,6 @@ export function AllDayEventItem({
     e.stopPropagation();
     onResizeMouseDown(e, event, "move");
   }
-
-  const [contextMenu, setContextMenu] = React.useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const closeContextMenu = React.useCallback(() => {
-    setContextMenu(null);
-    onContextMenuOpenChange?.(false);
-  }, [onContextMenuOpenChange]);
 
   function handleContextMenu(e: React.MouseEvent) {
     e.preventDefault();
