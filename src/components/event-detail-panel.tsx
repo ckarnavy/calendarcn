@@ -676,7 +676,7 @@ export function EventDetailPanel({ event, onEventChange, onPrevWeek, onNextWeek,
 
       {/* Date — editable inline input, indented to align with time text */}
       <div
-        className="ml-8 mr-2 flex min-w-[6.5rem] self-start cursor-text items-center rounded-sm border border-transparent px-2 py-1.5 hover:border-[#373737] has-[:focus]:border-[#242424] has-[:focus]:bg-[#242424]"
+        className="-mt-2 ml-8 mr-2 flex min-w-[6.5rem] self-start cursor-text items-center rounded-sm border border-transparent px-2 py-1.5 hover:border-[#373737] has-[:focus]:border-[#242424] has-[:focus]:bg-[#242424]"
         onClick={() => dateRef.current?.focus()}
       >
         <input
@@ -723,7 +723,7 @@ export function EventDetailPanel({ event, onEventChange, onPrevWeek, onNextWeek,
           </div>
         </>
       ) : (
-        <div className="flex items-center gap-6 pl-10">
+        <div className="-mt-2 flex items-center gap-6 pl-10">
           <span className="text-xs text-[#C7C5C1] dark:text-[#595959]">All-day</span>
           <span className="text-xs text-[#C7C5C1] dark:text-[#595959]">Time zone</span>
           <span className="text-xs text-[#C7C5C1] dark:text-[#595959]">Repeat</span>
