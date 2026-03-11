@@ -859,7 +859,7 @@ export function EventDetailPanel({ event, onEventChange, onPrevWeek, onNextWeek,
         )}
       </div>
 
-      {event.recurrence ? (
+      {optionsExpanded || event.isAllDay ? (
         <>
           {/* All-day toggle row — clicking label or row triggers toggle */}
           <div
@@ -884,52 +884,28 @@ export function EventDetailPanel({ event, onEventChange, onPrevWeek, onNextWeek,
             </div>
           )}
 
-          {/* Recurrence row */}
-          <div className="flex items-center gap-3 px-4">
-            <RefreshCcw className="size-4 shrink-0 text-[#C7C5C1] dark:text-[#595959]" />
-            <div className="flex flex-1 items-center justify-between">
-              <RecurrenceDisplay recurrence={event.recurrence} />
-              <div className="flex items-center">
-                <Button variant="ghost" size="icon" className="size-6 text-[#C7C5C1] dark:text-[#595959]" onClick={onPrevWeek}>
-                  <ChevronLeft className="size-3.5" />
-                </Button>
-                <Button variant="ghost" size="icon" className="size-6 text-[#C7C5C1] dark:text-[#595959]" onClick={onNextWeek}>
-                  <ChevronRight className="size-3.5" />
-                </Button>
+          {/* Recurrence row — active display for recurring, placeholder for non-recurring */}
+          {event.recurrence ? (
+            <div className="flex items-center gap-3 px-4">
+              <RefreshCcw className="size-4 shrink-0 text-[#C7C5C1] dark:text-[#595959]" />
+              <div className="flex flex-1 items-center justify-between">
+                <RecurrenceDisplay recurrence={event.recurrence} />
+                <div className="flex items-center">
+                  <Button variant="ghost" size="icon" className="size-6 text-[#C7C5C1] dark:text-[#595959]" onClick={onPrevWeek}>
+                    <ChevronLeft className="size-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="size-6 text-[#C7C5C1] dark:text-[#595959]" onClick={onNextWeek}>
+                    <ChevronRight className="size-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
-        </>
-      ) : optionsExpanded || event.isAllDay ? (
-        <>
-          {/* All-day toggle row — clicking label or row triggers toggle */}
-          <div
-            className="flex cursor-default items-center gap-3 px-4"
-            onClick={() => handleAllDayToggle(!(event.isAllDay ?? false))}
-          >
-            <Switch
-              size="xs"
-              checked={event.isAllDay ?? false}
-              onCheckedChange={handleAllDayToggle}
-              onClick={(e) => e.stopPropagation()}
-              className="data-[state=unchecked]:!bg-[#C7C5C1] dark:data-[state=unchecked]:!bg-[#595959] data-[state=checked]:!bg-[#3A85D3]"
-            />
-            <span className="text-foreground text-xs">All-day</span>
-          </div>
-
-          {/* Timezone row — hidden when all-day */}
-          {!event.isAllDay && (
+          ) : (
             <div className="flex items-center gap-3 px-4">
-              <Globe className="size-4 shrink-0 text-[#C7C5C1] dark:text-[#595959]" />
-              <TimezoneDisplay timezone={event.timezone ?? "GMT-3 Sao Paulo"} />
+              <RefreshCcw className="size-4 shrink-0 text-[#C7C5C1] dark:text-[#595959]" />
+              <span className="text-xs text-[#C7C5C1] dark:text-[#595959]">Repeat</span>
             </div>
           )}
-
-          {/* Repeat row (placeholder for non-recurring) */}
-          <div className="flex items-center gap-3 px-4">
-            <RefreshCcw className="size-4 shrink-0 text-[#C7C5C1] dark:text-[#595959]" />
-            <span className="text-xs text-[#C7C5C1] dark:text-[#595959]">Repeat</span>
-          </div>
         </>
       ) : (
         <div className="-mt-2 flex items-center pl-8">
