@@ -79,6 +79,18 @@ src/
 
 CalendarCN now uses TanStack Router search params as its public navigation contract for the main `/` route. Shareable calendar state such as view, date, visible day count, display toggles, and the selected event lives in the URL.
 
+## Local Library Build
+
+CalendarCN can also be consumed as a local package in another TanStack Start app.
+
+```bash
+pnpm build:lib
+```
+
+That emits a local package to `dist-library/` with the `calendarcn` package entrypoint and bundled styles.
+
+Integration notes and the controlled props contract live in [docs/library-integration.md](./docs/library-integration.md).
+
 ## Keyboard Shortcuts
 
 | Shortcut           | Action                  |

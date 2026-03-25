@@ -15,6 +15,36 @@ export interface ViewSettings {
 }
 
 /**
+ * Controlled props for the full CalendarCN shell component.
+ */
+export interface CalendarCNProps {
+  /** Reference date for the active view. */
+  currentDate: Date;
+  /** Events rendered in the calendar. */
+  events: CalendarEvent[];
+  /** Currently selected event identifier. */
+  selectedEventId?: string | null;
+  /** Active calendar view mode. */
+  view: ViewType;
+  /** Visible day count for custom multi-day modes. */
+  numberOfDays: number;
+  /** Toggleable display preferences. */
+  viewSettings: ViewSettings;
+  /** Called when the visible date should change. */
+  onCurrentDateChange: (date: Date) => void;
+  /** Called when an event is edited via drag, resize, or detail panel. */
+  onEventChange?: (event: CalendarEvent) => void;
+  /** Called when the selected event changes. */
+  onSelectedEventIdChange?: (eventId: string | null) => void;
+  /** Called when the view mode changes. */
+  onViewChange: (view: ViewType) => void;
+  /** Called when the visible day count changes. */
+  onNumberOfDaysChange?: (days: number) => void;
+  /** Called when display preferences change. */
+  onViewSettingsChange?: (settings: ViewSettings) => void;
+}
+
+/**
  * Represents a single day in the week view
  */
 export interface WeekDay {

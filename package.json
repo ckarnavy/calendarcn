@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "A beautifully crafted, open source calendar component for React. Built with shadcn/ui, inspired by Notion Calendar.",
   "type": "module",
+  "main": "./dist-library/index.js",
+  "types": "./dist-library/index.d.ts",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -11,18 +13,31 @@
   "keywords": [
     "calendar",
     "react",
-    "nextjs",
+    "tanstack-start",
+    "tanstack-router",
     "shadcn",
     "tailwindcss",
     "week-view",
     "notion-calendar"
   ],
+  "files": [
+    "dist-library"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist-library/index.js",
+      "types": "./dist-library/index.d.ts"
+    },
+    "./styles.css": "./dist-library/styles.css"
+  },
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "pnpm build:app && pnpm build:lib",
+    "build:app": "vite build",
+    "build:lib": "vite build --config vite.lib.config.ts",
     "start": "vite preview",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
@@ -58,6 +73,10 @@
     "tailwind-merge": "^3.4.0",
     "zod": "^3.25.76"
   },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  },
   "devDependencies": {
     "@tailwindcss/vite": "^4",
     "@tailwindcss/postcss": "^4",
@@ -71,6 +90,7 @@
     "tw-animate-css": "^1.4.0",
     "typescript": "^5",
     "vite": "^7.1.12",
+    "vite-plugin-dts": "^4.5.4",
     "vite-tsconfig-paths": "^5.1.4"
   }
 }

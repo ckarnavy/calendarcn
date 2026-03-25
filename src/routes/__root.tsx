@@ -6,12 +6,14 @@ import {
 } from "@tanstack/react-router";
 import { Agentation } from "agentation";
 
+import appFontsCss from "@/styles/app-fonts.css?url";
 import { ThemeProvider } from "@/components/theme-provider";
 import appCss from "@/styles/globals.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
     links: [
+      { href: appFontsCss, rel: "stylesheet" },
       { rel: "icon", href: "/favicon.ico" },
       { href: appCss, rel: "stylesheet" },
     ],
