@@ -112,6 +112,75 @@ function CalendarRoute() {
 - `onViewSettingsChange(settings: ViewSettings)`
   Fired when the user toggles weekends, declined events, or week numbers.
 
+## Embedded Variant
+
+Use `CalendarCNEmbedded` when the host app needs calendar interactions without the full CalendarCN shell.
+
+It keeps the calendar grid, toolbar, popovers, drag/resize behavior, and controlled state model, but removes:
+
+- the full-screen layout
+- the command menu
+- the app-style sidebars
+- built-in theme controls
+
+Example:
+
+```tsx
+import * as React from "react";
+import {
+  CalendarCNEmbedded,
+  type CalendarEvent,
+  type ViewSettings,
+  type ViewType,
+} from "calendarcn";
+
+const DEFAULT_VIEW_SETTINGS: ViewSettings = {
+  showDeclinedEvents: true,
+  showWeekNumbers: true,
+  showWeekends: true,
+};
+
+function EmbeddedCalendarExample() {
+  const [currentDate, setCurrentDate] = React.useState(() => new Date());
+  const [events, setEvents] = React.useState<Array<CalendarEvent>>([]);
+  const [selectedEventId, setSelectedEventId] = React.useState<string | null>(
+    null,
+  );
+  const [view, setView] = React.useState<ViewType>("week");
+  const [numberOfDays, setNumberOfDays] = React.useState(7);
+  const [viewSettings, setViewSettings] = React.useState<ViewSettings>(
+    DEFAULT_VIEW_SETTINGS,
+  );
+
+  return (
+    <CalendarCNEmbedded
+      className="h-full"
+      currentDate={currentDate}
+      events={events}
+      selectedEventId={selectedEventId}
+      view={view}
+      numberOfDays={numberOfDays}
+      viewSettings={viewSettings}
+      onCurrentDateChange={setCurrentDate}
+      onEventChange={(updatedEvent) => {
+        setEvents((previousEvents) =>
+          previousEvents.map((event) =>
+            event.id === updatedEvent.id ? updatedEvent : event,
+          ),
+        );
+      }}
+      onEventClick={(event) => {
+        console.log("clicked", event.id);
+      }}
+      onSelectedEventIdChange={setSelectedEventId}
+      onViewChange={setView}
+      onNumberOfDaysChange={setNumberOfDays}
+      onViewSettingsChange={setViewSettings}
+    />
+  );
+}
+```
+
 ## Styling
 
 - The package entry imports CalendarCN styles automatically.

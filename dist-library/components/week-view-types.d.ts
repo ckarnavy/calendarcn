@@ -41,6 +41,39 @@ export interface CalendarCNProps {
     onViewSettingsChange?: (settings: ViewSettings) => void;
 }
 /**
+ * Controlled props for the embedded calendar variant.
+ */
+export interface CalendarCNEmbeddedProps {
+    /** Optional className for the embedded container. */
+    className?: string;
+    /** Reference date for the active view. */
+    currentDate: Date;
+    /** Events rendered in the calendar. */
+    events: CalendarEvent[];
+    /** Current multi-day count shown in the view controls. */
+    numberOfDays: number;
+    /** Currently selected event identifier. */
+    selectedEventId?: string | null;
+    /** Active calendar view mode. */
+    view: ViewType;
+    /** Toggleable display preferences. */
+    viewSettings: ViewSettings;
+    /** Called when the visible date should change. */
+    onCurrentDateChange: (date: Date) => void;
+    /** Called when an event is edited. */
+    onEventChange?: (event: CalendarEvent) => void;
+    /** Optional event click side-effect for host apps. */
+    onEventClick?: (event: CalendarEvent) => void;
+    /** Called when the selected event changes. */
+    onSelectedEventIdChange?: (eventId: string | null) => void;
+    /** Called when the view mode changes. */
+    onViewChange: (view: ViewType) => void;
+    /** Called when the visible day count changes. */
+    onNumberOfDaysChange?: (days: number) => void;
+    /** Called when display preferences change. */
+    onViewSettingsChange?: (settings: ViewSettings) => void;
+}
+/**
  * Represents a single day in the week view
  */
 export interface WeekDay {
