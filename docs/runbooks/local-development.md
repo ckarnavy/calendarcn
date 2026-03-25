@@ -22,7 +22,7 @@ Components install to `src/components/ui/`. Don't edit these directly — custom
 ### Adding a New Event Color
 
 1. Add the color name to `EventColor` union in `src/components/week-view-types.ts`
-2. Add CSS variables in `src/app/globals.css` (both `:root` and `.dark`)
+2. Add CSS variables in `src/styles/globals.css` (both `:root` and `.dark`)
 3. Add the color entry to `eventColorStyles` map in `src/components/calendar-event-item.tsx`
 
 ### Adding a New Keyboard Shortcut

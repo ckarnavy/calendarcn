@@ -19,7 +19,8 @@ A beautifully crafted, open source calendar component for React. Built with [sha
 
 ## Tech Stack
 
-- [Next.js 16](https://nextjs.org/) - React framework
+- [TanStack Start](https://tanstack.com/start) - React application shell
+- [TanStack Router](https://tanstack.com/router) - Typed routing and URL state
 - [React 19](https://react.dev/) - UI library
 - [Tailwind CSS 4](https://tailwindcss.com/) - Styling
 - [shadcn/ui](https://ui.shadcn.com/) - UI components
@@ -60,7 +61,8 @@ pnpm dev
 
 ```
 src/
-├── app/                    # Next.js app router
+├── routes/                 # TanStack Start file routes
+├── styles/                 # Global CSS and Tailwind animation utilities
 ├── components/
 │   ├── ui/                 # shadcn/ui components
 │   ├── week-view.tsx       # Main week view component
@@ -73,15 +75,19 @@ src/
 └── lib/                    # Utilities and helpers
 ```
 
+## Routing
+
+CalendarCN now uses TanStack Router search params as its public navigation contract for the main `/` route. Shareable calendar state such as view, date, visible day count, display toggles, and the selected event lives in the URL.
+
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `T` | Go to today |
-| `J` / `ArrowLeft` | Previous week |
-| `K` / `ArrowRight` | Next week |
-| `/` | Toggle context panel |
-| `⌘ + /` | Toggle calendar sidebar |
+| Shortcut           | Action                  |
+| ------------------ | ----------------------- |
+| `T`                | Go to today             |
+| `J` / `ArrowLeft`  | Previous week           |
+| `K` / `ArrowRight` | Next week               |
+| `/`                | Toggle context panel    |
+| `⌘ + /`            | Toggle calendar sidebar |
 
 ## Contributing
 

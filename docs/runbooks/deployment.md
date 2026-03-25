@@ -2,7 +2,7 @@
 
 ## Overview
 
-CalendarCN auto-deploys to Vercel on push to `main`. This runbook covers manual checks and troubleshooting.
+CalendarCN builds as a TanStack Start client application with Vite. This runbook covers generic build verification and hosting handoff steps without assuming a specific provider.
 
 ## Pre-Deployment
 
@@ -16,9 +16,9 @@ pnpm build         # Must succeed
 ## Deployment Steps
 
 1. Merge PR to `main` via GitHub
-2. Vercel triggers automatic deployment
-3. Monitor build in Vercel dashboard
-4. Verify at https://calendarcn.vercel.app
+2. Build the app with `pnpm build`
+3. Deploy the generated output using your chosen static/Start-compatible host
+4. Verify the deployed site loads, routes, and preserves search-param state correctly
 
 ## Rollback
 
@@ -26,14 +26,14 @@ pnpm build         # Must succeed
 # Revert the merge commit
 git revert <merge-commit-sha>
 git push origin main
-# Vercel auto-deploys the revert
+# Re-run the deployment pipeline for your host
 ```
 
 ## Troubleshooting
 
-### Build Fails on Vercel
+### Build Fails In CI Or Hosting
 
-1. Check Vercel build logs for the specific error
+1. Check the build logs for the specific error
 2. Try reproducing locally: `pnpm build`
 3. Common causes: missing environment variables, type errors not caught locally
 
@@ -46,6 +46,6 @@ git push origin main
 
 ### Performance Issues
 
-1. Check bundle size in Vercel analytics
+1. Check your host or bundle analyzer output
 2. Look for unnecessary re-renders with React DevTools Profiler
 3. Verify memoization is working (check useMemo/useCallback deps)

@@ -2,13 +2,13 @@
 
 ## Overview
 
-CalendarCN is a client-side React calendar component built with Next.js App Router. There is no backend — all state lives in React and resets on page reload. The app renders a weekly calendar view with interactive drag, resize, and selection behaviors.
+CalendarCN is a client-side React calendar component built with TanStack Start and TanStack Router. There is no backend — all event data lives in React state and resets on page reload. Shareable calendar UI state lives in URL search params on the root route.
 
 ## System Diagram
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  page.tsx (App State Owner)                         │
+│  routes/index.tsx (Route + State Owner)            │
 │  ┌─────────────┬──────────────┬──────────────────┐  │
 │  │ currentDate  │ events[]     │ selectedEventId  │  │
 │  └──────┬──────┴──────┬───────┴────────┬─────────┘  │
@@ -39,24 +39,23 @@ CalendarCN is a client-side React calendar component built with Next.js App Rout
 
 ### State Ownership
 
-`page.tsx` is the single source of truth for all application state:
+`src/routes/index.tsx` is the state owner for the root route:
 
-- **`currentDate`** — the reference date for the visible week
-- **`events`** — array of `CalendarEvent` objects
-- **`selectedEventId`** — currently selected event (or null)
-- **`dirtyEventIds`** — tracks events modified via drag/resize
+- **URL search params** — `view`, `date`, `days`, display toggles, and `selectedEventId`
+- **`events`** — array of `CalendarEvent` objects stored in local React state
+- **`commandMenuOpen` / sidebar visibility** — transient UI state kept local to the route component
 
-State flows down as props. Mutations flow up via callbacks (`onEventChange`, `onDateChange`, `onEventSelect`).
+Route search state flows down as props. Event mutations flow up via callbacks (`onEventChange`, `onDateChange`, `onEventSelect`) and route changes go back through TanStack Router navigation.
 
 ### Event Lifecycle
 
 ```
-User interaction → Hook (drag/resize) → onEventChange callback → page.tsx setState → Re-render
+User interaction → Hook (drag/resize) → onEventChange callback → route component setState → Re-render
 ```
 
 1. User mousedown on event → hook captures initial state in `ref`
 2. User mousemove → hook computes snapped position, updates `dragState` / `resizeState`
-3. User mouseup → hook calls `onEventChange(updatedEvent)` → page.tsx merges into `events`
+3. User mouseup → hook calls `onEventChange(updatedEvent)` → route component merges into `events`
 
 ### Event Positioning Pipeline
 
@@ -73,7 +72,7 @@ events[] → getEventsForDay(day) → assignColumns() → calculatePositionedEve
 
 ### WeekView (`week-view.tsx`)
 
-The main orchestrator. Receives all state from `page.tsx`, computes derived data (week days, hours), and delegates rendering to sub-components.
+The main orchestrator. Receives route-derived state from `src/routes/index.tsx`, computes derived data (week days, hours), and delegates rendering to sub-components.
 
 ### WeekViewGrid (`week-view-grid.tsx`)
 
@@ -90,12 +89,12 @@ Renders a single event segment. Handles:
 
 ### Custom Hooks
 
-| Hook | Purpose | Key Pattern |
-|------|---------|-------------|
-| `useEventDrag` | Drag events across time/days | Ref-based intermediate state, snap-to-grid, auto-scroll |
-| `useEventResize` | Resize event duration | Anchor model, edge flipping, min duration enforcement |
-| `useAllDayResize` | Resize all-day event span | Column-based calculation, row re-stacking |
-| `useHorizontalScroll` | Smooth scroll in grid | Scroll container ref, buffer management |
+| Hook                  | Purpose                      | Key Pattern                                             |
+| --------------------- | ---------------------------- | ------------------------------------------------------- |
+| `useEventDrag`        | Drag events across time/days | Ref-based intermediate state, snap-to-grid, auto-scroll |
+| `useEventResize`      | Resize event duration        | Anchor model, edge flipping, min duration enforcement   |
+| `useAllDayResize`     | Resize all-day event span    | Column-based calculation, row re-stacking               |
+| `useHorizontalScroll` | Smooth scroll in grid        | Scroll container ref, buffer management                 |
 
 ## Styling Architecture
 
@@ -120,19 +119,20 @@ Components access colors via the `eventColorStyles` map, never hardcoded.
 
 ### Z-Index Scale
 
-| Layer | Z-Index | Usage |
-|-------|---------|-------|
-| Grid background | 0 | Base grid lines |
-| Events | 0–2 | Column index determines stacking |
-| Selected event | 20 | Elevated above peers |
-| Drag placeholder | 25 | Shows drop target |
-| Dragging copy | 30 | Follows cursor |
-| Portal overlay | 9999 | Popover/context menu |
+| Layer            | Z-Index | Usage                            |
+| ---------------- | ------- | -------------------------------- |
+| Grid background  | 0       | Base grid lines                  |
+| Events           | 0–2     | Column index determines stacking |
+| Selected event   | 20      | Elevated above peers             |
+| Drag placeholder | 25      | Shows drop target                |
+| Dragging copy    | 30      | Follows cursor                   |
+| Portal overlay   | 9999    | Popover/context menu             |
 
 ## Technology Decisions
 
 - **No backend**: Client-side only, mock data in `mock-events.ts`
 - **No global state library**: React state + prop drilling (project is small enough)
+- **TanStack Router URL state**: Shareable calendar state is encoded in typed search params on `/`
 - **shadcn/ui primitives**: Accessible, composable, styled with Tailwind
 - **date-fns over dayjs/moment**: Tree-shakeable, immutable, modern
 - **Tailwind CSS 4**: Utility-first, CSS variable integration, dark mode support

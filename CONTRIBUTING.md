@@ -23,8 +23,10 @@ pnpm format:check   # Check formatting without writing
 
 ```
 src/
-├── app/                          # Next.js app router
-│   └── page.tsx                  # Main page, owns currentDate state
+├── routes/                       # TanStack Start routes
+│   ├── __root.tsx                # App document shell, metadata, theme provider
+│   └── index.tsx                 # Main calendar route and URL state owner
+├── styles/                       # Global styles and Tailwind animation helpers
 ├── components/
 │   ├── ui/                       # shadcn/ui primitives
 │   ├── week-view.tsx             # Main week view component
@@ -45,7 +47,6 @@ src/
 │   └── use-horizontal-scroll.ts  # Wheel-based horizontal navigation
 └── lib/
     ├── event-utils.ts            # Event positioning and filtering
-    ├── format-utils.ts           # Time/duration formatting helpers
     ├── mock-events.ts            # Sample event data
     └── utils.ts                  # General utilities (cn)
 ```
